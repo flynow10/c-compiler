@@ -1,0 +1,35 @@
+TARGET_EXEC := parser
+
+BUILD_DIR := ./build
+SRC_DIR := ./src
+
+SRCS := $(shell find $(SRC_DIR) -name '*.cpp')
+
+OBJS := $(SRCS:$(SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
+
+DEPS := $(OBJS:.o=.d)
+
+INC_DIRS := $(shell find $(SRC_DIR) -type d)
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+
+CC := g++
+
+CFLAGS := -Wall
+
+#.PHONY: print
+#print: $(OBJS)
+#	ls -la $^
+
+$(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+	mkdir -p $(dir $@)
+	$(CC) $(INC_FLAGS) -MMD -MP $(CFLAGS) -c $< -o $@
+
+.PHONY: clean all
+clean:
+	rm -r $(BUILD_DIR)
+all: $(BUILD_DIR)/$(TARGET_EXEC)
+-include $(DEPS)
+

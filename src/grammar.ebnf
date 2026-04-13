@@ -1,0 +1,122 @@
+translation-unit := top-declaration+;
+
+top-declaration := declaration | function-declaration;
+
+function-declaration := FUNCTION_DECLARATION declaration-specifiers? declarator compound-statement;
+
+# statements
+
+compound-statement := '{' (declaration | statement)* '}'
+
+statement := compound-statement | expression-statement | selection-statement | iteration-statement | control-statement
+
+expression-statement := ';' | expression ';'
+
+selection-statement := IF '(' expression ')' compound-statement (ELSE compound-statement)?
+
+iteration-statement :=
+    WHILE '(' expression ')' compound-statement
+    | DO compound-statement WHILE '(' expression ')'
+    | FOR '(' expression-statement expression-statement expression? ')' compound-statement
+
+control-statement := (BREAK | CONTINUE) ';'
+
+# declaration and initialization
+
+declaration := declaration-specifiers init-declarator-list? ';'
+
+declaration-specifiers := (storage-class | type-specifier | type-qualifier)+
+
+storage-class := TYPEDEF | STATIC
+
+type-specifier := VOID | CHAR | SHORT | INT | LONG | UNSIGNED | SIGNED | struct-specifier | enum-specifier | TYPENAME
+
+struct-specifier := STRUCT ((IDENTIFIER? '{' struct-declaration '}') | IDENTIFIER)
+
+struct-declaration := ( specifier-qualifiers struct-declarator ';')*
+
+struct-declarator := declarator | declarator ':' constant-expression | ':' constant-expression
+
+enum-specifier := ENUM ((IDENTIFIER? '{' enumerator-list '}') | IDENTIFIER)
+
+enumerator-list := enumerator (',' enumerator)*
+
+enumerator := IDENTIFIER ('=' constant-expression)?
+
+type-qualifier := CONST
+
+init-declarator-list := init-declarator (',' init-declarator)*
+
+init-declarator := declarator ('=' initializer)?
+
+initializer := assignment-expression | '{' initializer-list ','? '}'
+
+initializer-list := initializer (',' initializer)*
+
+specifier-qualifiers := (type-specifier | type-qualifier)*
+
+declarator := pointer? direct-declarator
+
+direct-declarator := IDENTIFIER | '(' declarator ')' | index-declarator | parameterized-declarator
+
+index-declarator := direct-declarator '[' constant-expression? ']'
+
+parameterized-declarator := direct-declarator '(' (parameter-type-list | identifier-list)? ')'
+
+pointer := ('*')+ type-qualifier* pointer?
+
+parameter-type-list := parameter-list (',' ELLIPSIS)?
+
+parameter-list := parameter-declaration (',' parameter-declaration)*
+
+identifier-list := IDENTIFIER (',' IDENTIFIER)*
+
+parameter-declaration := declaration-specifiers (declarator | abstract-declarator)?
+
+abstract-declarator := pointer | direct-abstract-declarator | pointer direct-abstract-declarator
+
+direct-abstract-declarator := ('(' abstract-declarator ')')
+                            | (direct-abstract-declarator? '[' constant-expression? ']')
+                            | (direct-abstract-declarator? '(' parameter-type-list? ')')
+
+type-name := specifier-qualifiers abstract-declarator
+
+# expressions
+
+expression := assignment-expression (',' assignment-expression)*
+
+assignment-expression := logical-or-expression | unary-expression assignment-operator assignment-expression
+
+assignment-operator := '=' | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | LEFT_ASSIGN | RIGHT_ASSIGN | AND_ASSIGN | OR_ASSIGN | XOR_ASSIGN
+
+logical-or-expression := logical-and-expression (OR_OP logical-or-expression)?
+
+logical-and-expression := inclusive-or-expression (AND_OP logical-and-expression)?
+
+inclusive-or-expression := exclusive-or-expression ('|' inclusive-or-expression)?
+
+exclusive-or-expression := and-expression ('^' exclusive-or-expression)?
+
+and-expression := equality-expression ('&' and-expression)?
+
+equality-expression := relational-expression ((EQ_OP | NE_OP) equality-expression)?
+
+relational-expression := shift-expression (('<' | '>' | LE_OP | GE_OP) relational-expression)?
+
+shift-expression := additive-expression ((LEFT_OP | RIGHT_OP) shift-expression)?
+
+additive-expression := multiplicative-expression (('+' | '-') additive-expression)?
+
+multiplicative-expression := cast-expression (('*' | '/' | '%') multiplicative-expression)?
+
+cast-expression := unary-expression | ('(' type-name ')' cast-expression)
+
+unary-expression := postfix-expression | ((INC_OP | DEC_OP | SIZEOF) unary-expression | unary-operator cast-expression | SIZEOF '(' type-name ')'
+
+unary-operator := '&' | '*' | '+' | '-' | '~' | '!'
+
+postfix-expression := primary-expression (('[' expression ']') | ('(' argument-list-expression? ')') | (('.' | PTR_OP) IDENTIFIER) | INC_OP | DEC_OP)*
+
+argument-list-expression := assignment_expression (',' assignment_expression)*
+
+primary-expression := IDENTIFIER | CONSTANT | STRING_LITERAL | ('(' expression ')')
