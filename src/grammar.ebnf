@@ -55,11 +55,9 @@ direct-declarator := IDENTIFIER | '(' declarator ')' | index-declarator | parame
 
 index-declarator := direct-declarator '[' constant-expression? ']'
 
-parameterized-declarator := direct-declarator '(' (parameter-type-list | identifier-list)? ')'
+parameterized-declarator := direct-declarator '(' (parameter-list | identifier-list)? ')'
 
 pointer := ('*')+ type-qualifier* pointer?
-
-parameter-type-list := parameter-list (',' ELLIPSIS)?
 
 parameter-list := parameter-declaration (',' parameter-declaration)*
 
@@ -83,7 +81,7 @@ expression := assignment-expression (',' assignment-expression)*
 
 assignment-expression := logical-or-expression | unary-expression assignment-operator assignment-expression
 
-assignment-operator := '=' | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | LEFT_ASSIGN | RIGHT_ASSIGN | AND_ASSIGN | OR_ASSIGN | XOR_ASSIGN
+assignment-operator := '=' | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | LEFT_ASSIGN | RIGHT_ASSIGN | AND_ASSIGN | OR_ASSIGN | XOR_ASSIGN | MOD_ASSIGN
 
 logical-or-expression := logical-and-expression (OR_OP logical-or-expression)?
 

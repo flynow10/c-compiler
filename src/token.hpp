@@ -42,6 +42,7 @@ enum class TokenType {
     AndAssign,
     OrAssign,
     XorAssign,
+    ModAssign,
     OrOp,
     AndOp,
     EqOp,

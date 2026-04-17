@@ -41,6 +41,7 @@ const std::map<std::string, TokenType> DoubleTokens = {
     {"&=", TokenType::AndAssign},
     {"|=", TokenType::OrAssign},
     {"^=", TokenType::XorAssign},
+    {"%=", TokenType::ModAssign},
     {"||", TokenType::OrOp},
     {"&&", TokenType::AndOp},
     {"==", TokenType::EqOp},
