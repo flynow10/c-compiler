@@ -5,6 +5,7 @@
 #include <string>
 
 #include "lexer.hpp"
+#include "parse.hpp"
 
 struct CompilerOptions {
   std::string inFile;
@@ -46,18 +47,18 @@ int main(const int argc, char *argv[]) {
 
   std::ifstream inputFile(options.inFile);
 
-  Lexer lexer;
-  lexer.tokenize(inputFile);
+  // Lexer lexer;
+  // lexer.tokenize(inputFile);
 
-  while (lexer.has_token()) {
-    std::cout << lexer.pop().type() << std::endl;
-  }
+  // while (lexer.has_token()) {
+  //   std::cout << lexer.pop().type() << std::endl;
+  // }
 
-  // Parser parser;
-  //
-  // const auto ast = parser.parse(inputFile);
-  //
-  // std::cout << ast;
+  Parser parser;
+
+  const auto ast = parser.parse(inputFile);
+
+  std::cout << ast;
 
   inputFile.close();
 

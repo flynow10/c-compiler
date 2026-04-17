@@ -27,21 +27,15 @@ declaration := declaration-specifiers init-declarator-list? ';'
 
 declaration-specifiers := (storage-class | type-specifier | type-qualifier)+
 
-storage-class := TYPEDEF | STATIC
+storage-class := STATIC
 
-type-specifier := VOID | CHAR | SHORT | INT | LONG | UNSIGNED | SIGNED | struct-specifier | enum-specifier | TYPENAME
+type-specifier := VOID | CHAR | SHORT | INT | LONG | UNSIGNED | SIGNED | struct-specifier
 
 struct-specifier := STRUCT ((IDENTIFIER? '{' struct-declaration '}') | IDENTIFIER)
 
 struct-declaration := ( specifier-qualifiers struct-declarator ';')*
 
-struct-declarator := declarator | declarator ':' constant-expression | ':' constant-expression
-
-enum-specifier := ENUM ((IDENTIFIER? '{' enumerator-list '}') | IDENTIFIER)
-
-enumerator-list := enumerator (',' enumerator)*
-
-enumerator := IDENTIFIER ('=' constant-expression)?
+struct-declarator := declarator
 
 type-qualifier := CONST
 
@@ -82,6 +76,8 @@ direct-abstract-declarator := ('(' abstract-declarator ')')
 type-name := specifier-qualifiers abstract-declarator
 
 # expressions
+
+constant-expression := logical-or-expression
 
 expression := assignment-expression (',' assignment-expression)*
 

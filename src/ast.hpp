@@ -47,6 +47,19 @@ namespace AST {
         friend std::ostream &operator<<(std::ostream &os, const std::shared_ptr<Node> &obj) {
             return os << AST::to_string(obj);
         }
+
+        [[nodiscard]] std::string get_name() const {
+            const std::string nodeName = _get_name();
+            if (nodeName.empty()) {
+                return "UnnamedNode";
+            }
+            return "AST::" + nodeName;
+        }
+
+    protected:
+        [[nodiscard]] virtual std::string _get_name() const {
+            return "";
+        }
     };
 
     class TranslationUnit : public Node {
@@ -55,7 +68,7 @@ namespace AST {
 
     public:
         ~TranslationUnit() override {
-            delete nodes;
+            delete[] nodes;
         }
 
         [[nodiscard]] size_t get_size() const {
@@ -77,9 +90,18 @@ namespace AST {
             std::ranges::copy(nodes, base->nodes);
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "TranslationUnit";
+        }
     };
 
     class Statement : public Node {
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "Statement";
+        }
     };
 
     class Decl : public Node {
@@ -122,6 +144,10 @@ namespace AST {
             std::ranges::copy(declarators, base->nodes + base->num_spec_quals);
             return base;
         }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "Decl";
+        }
     };
 
     class StorageClass : public Node {
@@ -140,14 +166,22 @@ namespace AST {
 
     private:
         StorageClassType type = AUTO;
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "StorageClass";
+        }
     };
 
     class TypeSpecifier : public Node {
     public:
-        enum TypeSpecifierType { VOID, CHAR, SHORT, INT, LONG, UNSIGNED, SIGNED, STRUCT, ENUM, TYPENAME };
+        enum TypeSpecifierType { VOID, CHAR, SHORT, INT, LONG, UNSIGNED, SIGNED, STRUCT, ENUM};
+
+        [[nodiscard]] TypeSpecifierType get_type() const {
+            return type;
+        }
 
         static shared_ptr<TypeSpecifier> create(const TypeSpecifierType type) {
-            if (type == STRUCT || type == ENUM || type == TYPENAME) {
+            if (type == STRUCT || type == ENUM) {
                 throw std::runtime_error("Cannot create specific type specifier with general factor method");
             }
             auto base = std::make_shared<TypeSpecifier>();
@@ -157,40 +191,244 @@ namespace AST {
 
     protected:
         TypeSpecifierType type = VOID;
+
+        [[nodiscard]] std::string _get_name() const override {
+            return "TypeSpecifier";
+        }
     };
 
     class StructSpecifier : public TypeSpecifier {
         std::string structName;
+        shared_ptr<Node> structDeclaration = nullptr;
+        bool hasDeclaration = false;
         bool hasStructName = false;
+    public:
+        static shared_ptr<StructSpecifier> create(const std::string &structName) {
+            auto base = std::make_shared<StructSpecifier>();
+            base->structName = structName;
+            base->hasStructName = true;
+            base->hasDeclaration = false;
+            return base;
+        }
+        static shared_ptr<StructSpecifier> create(const std::string &structName, shared_ptr<Node> structDeclaration) {
+            auto base = std::make_shared<StructSpecifier>();
+            if (structName.empty()) {
+                base->hasStructName = false;
+            } else {
+                base->structName = structName;
+                base->hasStructName = true;
+            }
+            base->structDeclaration = std::move(structDeclaration);
+            base->hasDeclaration = true;
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->TypeSpecifier::_get_name() + "::StructSpecifier";
+        }
     };
 
-    class EnumSpecifier : public TypeSpecifier {};
+    class StructDeclList : public Node {
+        // TODO: Replace with node list
+        std::vector<shared_ptr<Node>> structDeclarations;
+    public:
+        static shared_ptr<StructDeclList> create(std::vector<shared_ptr<Node>> structDeclarations) {
+            auto base = std::make_shared<StructDeclList>();
+            base->structDeclarations = std::move(structDeclarations);
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "StructDeclList";
+        }
+    };
+
+    class StructDecl : public Node {
+        // TODO: Replace with node list
+        std::vector<shared_ptr<Node>> specifier_quals;
+        shared_ptr<Node> declarator;
+
+    public:
+        static shared_ptr<StructDecl> create(std::vector<shared_ptr<Node>> specifier_quals, shared_ptr<Node> declarator) {
+            auto base = std::make_shared<StructDecl>();
+            base->specifier_quals = std::move(specifier_quals);
+            base->declarator = std::move(declarator);
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "StructDecl";
+        }
+    };
 
     class TypeQualifier : public Node {
+        // Empty because TypeQualifier is implied to represent a "const" in slimmed down language spec
     public:
         static shared_ptr<TypeQualifier> create() {
-            auto base = std::make_shared<TypeQualifier>();
-            return base;
+            return std::make_shared<TypeQualifier>();
         }
-    };
-
-    class TypenameSpecifier : public TypeSpecifier {
-        std::string typeName;
-    public:
-        [[nodiscard]] std::string get_name() const {
-            return typeName;
-        }
-
-        static shared_ptr<TypenameSpecifier> create(std::string name) {
-            auto base = std::make_shared<TypenameSpecifier>();
-            base->type = TYPENAME;
-            base->typeName = std::move(name);
-            return base;
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "TypeQualifier";
         }
     };
 
     class Declarator : public Node {
+        enum {DIRECT_DECLARATOR, POINTER, SUFFIX};
+        shared_ptr<Node> nodes[3];
+        bool hasPointer = false;
+        bool hasSuffix = false;
+    public:
+        static shared_ptr<Declarator> create(shared_ptr<Node> declarator) {
+            return create(std::move(declarator), nullptr);
+        }
 
+        static shared_ptr<Declarator> create(shared_ptr<Node> directDeclarator, shared_ptr<Node> pointer) {
+            return create(std::move(directDeclarator), std::move(pointer), nullptr);
+        }
+
+        static shared_ptr<Declarator> create(shared_ptr<Node> directDeclarator, shared_ptr<Node> pointer, shared_ptr<Node> suffix) {
+            auto base = std::make_shared<Declarator>();
+            base->nodes[DIRECT_DECLARATOR] = std::move(directDeclarator);
+            base->nodes[POINTER] = std::move(pointer);
+            base->nodes[SUFFIX] = std::move(suffix);
+            base->hasPointer = pointer != nullptr;
+            base->hasSuffix = suffix != nullptr;
+            return base;
+        }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "Declarator";
+        }
+    };
+
+    class Pointer : public Node {
+        shared_ptr<Pointer> nextPointer = nullptr;
+        bool isConst = false;
+    public:
+        void set_next_pointer(shared_ptr<Pointer> nextPointer) {
+            this->nextPointer = std::move(nextPointer);
+        }
+
+        shared_ptr<Pointer> get_next_pointer() {
+            return nextPointer;
+        }
+
+        shared_ptr<Node> *begin() override {
+            if (nextPointer == nullptr) {
+                return nullptr;
+            }
+            return reinterpret_cast<shared_ptr<Node> *>(&nextPointer);
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *begin() const override {
+            if (nextPointer == nullptr) {
+                return nullptr;
+            }
+            return reinterpret_cast<const shared_ptr<Node> *>(&nextPointer);
+        }
+
+        shared_ptr<Node> *end() override {
+            if (nextPointer == nullptr) {
+                return nullptr;
+            }
+            return reinterpret_cast<shared_ptr<Node> *>(&nextPointer + 1);
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *end() const override {
+            if (nextPointer == nullptr) {
+                return nullptr;
+            }
+            return reinterpret_cast<const shared_ptr<Node> *>(&nextPointer + 1);
+        }
+
+        static shared_ptr<Pointer> create(const bool isConst) {
+            auto base = std::make_shared<Pointer>();
+            base->isConst = isConst;
+            return base;
+        }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "Pointer";
+        }
+    };
+
+    class DirectDeclarator : public Node {
+        std::string identifier;
+    public:
+        static shared_ptr<DirectDeclarator> create(std::string identifier) {
+            auto base = std::make_shared<DirectDeclarator>();
+            base->identifier = std::move(identifier);
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "DirectDeclarator";
+        }
+    };
+
+    class IndexDeclarator : public Node {
+        shared_ptr<Node> constantExpression;
+    public:
+        shared_ptr<Node> * begin() override {
+            return &constantExpression;
+        }
+
+        [[nodiscard]] const shared_ptr<Node> * begin() const override {
+            return &constantExpression;
+        }
+
+        shared_ptr<Node> * end() override {
+            return &constantExpression + 1;
+        }
+
+        [[nodiscard]] const shared_ptr<Node> * end() const override {
+            return &constantExpression + 1;
+        }
+
+        static shared_ptr<IndexDeclarator> create(shared_ptr<Node> constantExpression) {
+            auto base = std::make_shared<IndexDeclarator>();
+            base->constantExpression = std::move(constantExpression);
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "IndexDeclarator";
+        }
+    };
+
+    class ParameterizedDeclarator : public Node {
+        shared_ptr<Node> parameterList;
+
+    public:
+        shared_ptr<Node> * begin() override {
+            return &parameterList;
+        }
+
+        [[nodiscard]] const shared_ptr<Node> * begin() const override {
+            return &parameterList;
+        }
+
+        shared_ptr<Node> * end() override {
+            return &parameterList + 1;
+        }
+
+        [[nodiscard]] const shared_ptr<Node> * end() const override {
+            return &parameterList + 1;
+        }
+
+        static shared_ptr<ParameterizedDeclarator> create(shared_ptr<Node> parameterList) {
+            auto base = std::make_shared<ParameterizedDeclarator>();
+            base->parameterList = std::move(parameterList);
+            return base;
+        }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "ParameterizedDeclarator";
+        }
     };
 
     class InitDeclarator : public Node {
@@ -229,6 +467,49 @@ namespace AST {
             base->hasInitializer = initializer != nullptr;
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "InitDeclarator";
+        }
+    };
+
+    class InitializerList : public Node {
+        shared_ptr<Node> *initializers = nullptr;
+        size_t initializerCount = 0;
+    public:
+        ~InitializerList() override {
+            delete[] initializers;
+        }
+
+        [[nodiscard]] shared_ptr<Node> *begin() override {
+            return &initializers[0];
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *begin() const override {
+            return &initializers[0];
+        }
+
+        [[nodiscard]] shared_ptr<Node> *end() override {
+            return &initializers[initializerCount];
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *end() const override {
+            return &initializers[initializerCount];
+        }
+
+        static shared_ptr<InitializerList> create(std::vector<shared_ptr<Node>> initializers) {
+            auto base = std::make_shared<InitializerList>();
+            base->initializers = new shared_ptr<Node>[initializers.size()];
+            base->initializerCount = initializers.size();
+            std::ranges::copy(initializers.begin(), initializers.end(), base->initializers);
+            return base;
+        }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "InitializerList";
+        }
     };
 
     class FunctionDecl : public Node {
@@ -252,6 +533,11 @@ namespace AST {
             base->body = std::move(body);
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "FunctionDecl";
+        }
     };
 
     class CompoundStatement : public Statement {
@@ -260,7 +546,7 @@ namespace AST {
 
     public:
         ~CompoundStatement() override {
-            delete statements;
+            delete[] statements;
         }
 
         [[nodiscard]] size_t get_size() const {
@@ -290,14 +576,62 @@ namespace AST {
             std::ranges::copy(statements, base->statements);
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "CompoundStatement";
+        }
     };
 
     class Expression : public Statement {
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Statement::_get_name() + "::Expression";
+        }
     };
 
     class ExpressionList : public Expression {
+        shared_ptr<Expression> *expressions = nullptr;
+        size_t size = 0;
 
+    public:
+        ~ExpressionList() override {
+            delete[] expressions;
+        }
+        [[nodiscard]] size_t get_size() const {
+            return size;
+        }
+
+        [[nodiscard]] shared_ptr<Node> * begin() override {
+            return reinterpret_cast<shared_ptr<Node> *>(expressions);
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *begin() const override {
+            return reinterpret_cast<const shared_ptr<Node> *>(expressions);
+        }
+
+        [[nodiscard]] shared_ptr<Node> * end() override {
+            return reinterpret_cast<shared_ptr<Node> *>(expressions + size);
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *end() const override {
+            return reinterpret_cast<const shared_ptr<Node> *> (expressions + size);
+        }
+
+        static shared_ptr<ExpressionList> create(std::vector<shared_ptr<Expression>> expressions) {
+            auto base = std::make_shared<ExpressionList>();
+            base->expressions = new shared_ptr<Expression>[expressions.size()];
+            base->size = expressions.size();
+            std::ranges::copy(expressions.begin(), expressions.end(), base->expressions);
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Expression::_get_name() + "::ExpressionList";
+        }
     };
+
+    class
 
     class SelectionStatement : public Statement {
         enum { CONDITION, IF_BODY, ELSE_BODY };
@@ -352,6 +686,11 @@ namespace AST {
             base->hasElse = true;
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Statement::_get_name() + "::SelectionStatement";
+        }
     };
 
     class WhileStatement : public Statement {
@@ -390,6 +729,11 @@ namespace AST {
             base->nodes[1] = std::move(body);
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Statement::_get_name() + "::WhileStatement";
+        }
     };
 
     class DoStatement : public Statement {
@@ -427,6 +771,11 @@ namespace AST {
             base->nodes[CONDITION] = std::move(condition);
             base->nodes[BODY] = std::move(body);
             return base;
+        }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Statement::_get_name() + "::DoStatement";
         }
     };
 
@@ -488,6 +837,11 @@ namespace AST {
             base->nodes[BODY] = std::move(body);
             return base;
         }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Statement::_get_name() + "::ForStatement";
+        }
     };
 
     class ControlStatement : public Statement {
@@ -536,6 +890,11 @@ namespace AST {
 
     private:
         State state = BREAK;
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return this->Statement::_get_name() + "::ControlStatement";
+        }
     };
 } // namespace AST
 #endif // !AST_H

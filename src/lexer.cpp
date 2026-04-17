@@ -69,7 +69,6 @@ const std::map<std::string, TokenType> Keywords = {
     {"break", TokenType::Break},
     {"continue", TokenType::Continue},
     {"return", TokenType::Return},
-    {"typedef", TokenType::Typedef},
     {"static", TokenType::Static},
     {"void", TokenType::Void},
     {"char", TokenType::Char},
@@ -79,7 +78,6 @@ const std::map<std::string, TokenType> Keywords = {
     {"unsigned", TokenType::Unsigned},
     {"signed", TokenType::Signed},
     {"struct", TokenType::Struct},
-    {"enum", TokenType::Enum},
     {"const", TokenType::Const},
     {"sizeof", TokenType::Sizeof},
 };
@@ -253,6 +251,14 @@ void Lexer::save_cursor() {
     cursorStack.push(currentToken);
 }
 
+int Lexer::_get_cursor() const{
+    return currentToken;
+}
+
+void Lexer::_set_cursor(const int cursor) {
+    currentToken = cursor;
+}
+
 void Lexer::succeed() {
     cursorStack.pop();
 }
@@ -260,10 +266,6 @@ void Lexer::succeed() {
 void Lexer::back_track() {
     currentToken = cursorStack.top();
     cursorStack.pop();
-}
-
-void Lexer::store_type_name(const std::string &name) {
-    typeNames.push_back(name);
 }
 
 Token Lexer::eat(const TokenType expectedType) {
@@ -274,7 +276,7 @@ Token Lexer::eat(const TokenType expectedType) {
     if (token.type() != expectedType) {
         std::stringstream ss("Incorrect token type! Expected: ");
 
-        ss << expectedType << " but received " << token.type();
+        ss << expectedType << " expected but received " << token.type();
 
         std::string error;
         getline(ss, error);
@@ -286,13 +288,7 @@ Token Lexer::eat(const TokenType expectedType) {
 Token Lexer::peek() const { return peek(0); }
 
 Token Lexer::peek(const int offset) const {
-    auto token = tokens.at(currentToken + offset);
-    if (token.type() == TokenType::Identifier) {
-        if (std::ranges::find(typeNames, token.value()) != typeNames.end()) {
-            return createToken(TokenType::Typename, token.value());
-        }
-    }
-    return token;
+    return tokens.at(currentToken + offset);
 }
 
 bool Lexer::has_token() const { return currentToken < tokens.size(); }

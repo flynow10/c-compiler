@@ -11,7 +11,6 @@
 enum class TokenType {
     Directive,
     Identifier,
-    Typename,
     Constant,
     StringLiteral,
     FunctionDeclaration,
@@ -23,7 +22,6 @@ enum class TokenType {
     Continue,
     Break,
     Return,
-    Typedef,
     Static,
     Void,
     Char,
@@ -33,7 +31,6 @@ enum class TokenType {
     Unsigned,
     Signed,
     Struct,
-    Enum,
     Const,
     Sizeof,
     AddAssign,
@@ -103,7 +100,6 @@ inline std::ostream &operator<<(std::ostream &out, const TokenType value) {
 #define INSERT_ELEMENT(p) result.emplace(p, #p)
         INSERT_ELEMENT(TokenType::Directive);
         INSERT_ELEMENT(TokenType::Identifier);
-        INSERT_ELEMENT(TokenType::Typename);
         INSERT_ELEMENT(TokenType::Constant);
         INSERT_ELEMENT(TokenType::StringLiteral);
         INSERT_ELEMENT(TokenType::FunctionDeclaration);
@@ -115,7 +111,6 @@ inline std::ostream &operator<<(std::ostream &out, const TokenType value) {
         INSERT_ELEMENT(TokenType::Continue);
         INSERT_ELEMENT(TokenType::Break);
         INSERT_ELEMENT(TokenType::Return);
-        INSERT_ELEMENT(TokenType::Typedef);
         INSERT_ELEMENT(TokenType::Static);
         INSERT_ELEMENT(TokenType::Void);
         INSERT_ELEMENT(TokenType::Char);
@@ -125,7 +120,6 @@ inline std::ostream &operator<<(std::ostream &out, const TokenType value) {
         INSERT_ELEMENT(TokenType::Unsigned);
         INSERT_ELEMENT(TokenType::Signed);
         INSERT_ELEMENT(TokenType::Struct);
-        INSERT_ELEMENT(TokenType::Enum);
         INSERT_ELEMENT(TokenType::Const);
         INSERT_ELEMENT(TokenType::Sizeof);
         INSERT_ELEMENT(TokenType::AddAssign);

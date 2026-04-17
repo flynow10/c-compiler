@@ -13,9 +13,16 @@ public:
   Token eat(TokenType expectedType);
   Token pop();
   void save_cursor();
+
+  [[nodiscard]] int _get_cursor() const;
+
+  /**
+   * @warning Only use in conjunction with _get_cursor
+   */
+  void _set_cursor(int cursor);
+
   void succeed();
   void back_track();
-  void store_type_name(const std::string &name);
   [[nodiscard]] Token peek() const;
   [[nodiscard]] Token peek(int offset) const;
   [[nodiscard]] bool has_token() const;
@@ -23,7 +30,6 @@ public:
 private:
   int currentToken;
   std::vector<Token> tokens;
-  std::vector<std::string> typeNames;
   std::stack<int> cursorStack;
 };
 
