@@ -1,0 +1,9 @@
+AST::TranslationUnit 0x10134e658
+|AST::FunctionDecl 0x10134e608
+||AST::DeclSpecifiers 0x10134d218
+|||AST::TypeSpecifier 0x10134b128
+||AST::Declarator 0x10134d2d8
+|||AST::DirectDeclarator 0x10134d248
+|||AST::ParameterizedDeclarator 0x10134d288
+||AST::CompoundStatement 0x10134e5d8
+|||AST::Statement::ControlStatement 0x10134e598

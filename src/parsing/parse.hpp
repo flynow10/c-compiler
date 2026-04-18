@@ -2,7 +2,7 @@
 #define PARSE_H
 
 #include "ast.hpp"
-#include "lexer.hpp"
+#include "../lexer.hpp"
 #include <istream>
 #include <memory>
 
@@ -30,8 +30,8 @@ private:
   shared_ptr<AST::Declarator> parse_declarator(bool isAbstract = false);
   shared_ptr<AST::Pointer> parse_pointer();
   shared_ptr<AST::Node> parse_direct_declarator(bool isAbstract = false);
-  shared_ptr<AST::IndexDeclarator> parse_index_declarator();
-  shared_ptr<AST::ParameterizedDeclarator> parse_parameterized_declarator();
+  shared_ptr<AST::IndexDeclarator> parse_index_declarator(shared_ptr<AST::Node> prevSuffix);
+  shared_ptr<AST::ParameterizedDeclarator> parse_parameterized_declarator(shared_ptr<AST::Node> prevSuffix);
   shared_ptr<AST::ParameterList> parse_parameter_list();
   shared_ptr<AST::Parameter> parse_parameter();
   shared_ptr<AST::InitDeclarator> parse_init_declarator();

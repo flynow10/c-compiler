@@ -75,12 +75,20 @@ namespace AST {
             return size;
         }
 
+        shared_ptr<Node> *begin() override {
+            return nodes;
+        }
+
         [[nodiscard]] const shared_ptr<Node> *begin() const override {
             return nodes;
         }
 
+        shared_ptr<Node> *end() override {
+            return &nodes[size];
+        }
+
         [[nodiscard]] const shared_ptr<Node> *end() const override {
-            return nodes + size;
+            return &nodes[size];
         }
 
         static shared_ptr<TranslationUnit> create(const std::vector<shared_ptr<Node> > &nodes) {
@@ -137,7 +145,7 @@ namespace AST {
         static shared_ptr<Decl> create(const std::vector<shared_ptr<Node> > &spec_quals,
                                        const std::vector<shared_ptr<Node> > &declarators) {
             auto base = std::make_shared<Decl>();
-            base->nodes = new shared_ptr<Node>[spec_quals.size()];
+            base->nodes = new shared_ptr<Node>[spec_quals.size() + declarators.size()];
             base->num_spec_quals = spec_quals.size();
             base->num_declarators = declarators.size();
             std::ranges::copy(spec_quals, base->nodes);
@@ -243,6 +251,31 @@ namespace AST {
         bool hasStructName = false;
 
     public:
+
+        shared_ptr<Node> *begin() override {
+            if (!hasDeclaration)
+                return nullptr;
+            return &structDeclaration;
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *begin() const override {
+            if (!hasDeclaration)
+                return nullptr;
+            return &structDeclaration;
+        }
+
+        shared_ptr<Node> *end() override {
+            if (!hasDeclaration)
+                return nullptr;
+            return &structDeclaration + 1;
+        }
+
+        [[nodiscard]] const shared_ptr<Node> *end() const override {
+            if (!hasDeclaration)
+                return nullptr;
+            return &structDeclaration + 1;
+        }
+
         static shared_ptr<StructSpecifier> create(const std::string &structName) {
             auto base = std::make_shared<StructSpecifier>();
             base->structName = structName;
@@ -316,6 +349,9 @@ namespace AST {
         shared_ptr<Node> *nodes = nullptr;
         size_t size = 0;
     public:
+        ~StructDecl() override {
+            delete[] nodes;
+        }
         [[nodiscard]] size_t get_size() const {
             return size;
         }
@@ -333,19 +369,19 @@ namespace AST {
         }
 
         shared_ptr<Node> *end() override {
-            return nodes + size;
+            return nodes + size + 1;
         }
 
         [[nodiscard]] const shared_ptr<Node> *end() const override {
-            return nodes + size;
+            return nodes + size + 1;
         }
 
         static shared_ptr<StructDecl> create(std::vector<shared_ptr<Node> > specifier_quals,
                                              shared_ptr<Node> declarator) {
             auto base = std::make_shared<StructDecl>();
-            base->nodes = new shared_ptr<Node>[base->get_size() + 1];
+            base->nodes = new shared_ptr<Node>[specifier_quals.size() + 1];
             base->nodes[0] = std::move(declarator);
-            base->size = base->get_size();
+            base->size = specifier_quals.size();
             std::ranges::copy(specifier_quals, base->nodes + 1);
             return base;
         }
@@ -409,12 +445,12 @@ namespace AST {
         static shared_ptr<Declarator> create(shared_ptr<Node> directDeclarator, shared_ptr<Node> pointer,
                                              shared_ptr<Node> suffix) {
             auto base = std::make_shared<Declarator>();
-            base->nodes[DIRECT_DECLARATOR] = std::move(directDeclarator);
-            base->nodes[POINTER] = std::move(pointer);
-            base->nodes[SUFFIX] = std::move(suffix);
             base->isAbstract = directDeclarator == nullptr;
             base->hasPointer = pointer != nullptr;
             base->hasSuffix = suffix != nullptr;
+            base->nodes[DIRECT_DECLARATOR] = std::move(directDeclarator);
+            base->nodes[POINTER] = std::move(pointer);
+            base->nodes[SUFFIX] = std::move(suffix);
             return base;
         }
 
@@ -494,28 +530,32 @@ namespace AST {
     };
 
     class IndexDeclarator : public Node {
-        shared_ptr<Node> constantExpression;
+        enum {CONSTANT_EXPRESSION, NEXT_SUFFIX};
+        shared_ptr<Node> nodes[2];
+        bool hasNext = false;
 
     public:
         shared_ptr<Node> *begin() override {
-            return &constantExpression;
+            return nodes;
         }
 
         [[nodiscard]] const shared_ptr<Node> *begin() const override {
-            return &constantExpression;
+            return nodes;
         }
 
         shared_ptr<Node> *end() override {
-            return &constantExpression + 1;
+            return &nodes[2];
         }
 
         [[nodiscard]] const shared_ptr<Node> *end() const override {
-            return &constantExpression + 1;
+            return &nodes[2];
         }
 
-        static shared_ptr<IndexDeclarator> create(shared_ptr<Node> constantExpression) {
+        static shared_ptr<IndexDeclarator> create(shared_ptr<Node> constantExpression, shared_ptr<Node> suffix) {
             auto base = std::make_shared<IndexDeclarator>();
-            base->constantExpression = std::move(constantExpression);
+            base->hasNext = suffix != nullptr;
+            base->nodes[CONSTANT_EXPRESSION] = std::move(constantExpression);
+            base->nodes[NEXT_SUFFIX] = std::move(suffix);
             return base;
         }
 
@@ -526,28 +566,32 @@ namespace AST {
     };
 
     class ParameterizedDeclarator : public Node {
-        shared_ptr<Node> parameterList;
+        enum {PARAMETER_LIST, NEXT_SUFFIX};
+        shared_ptr<Node> nodes[2];
+        bool hasNext = false;
 
     public:
         shared_ptr<Node> *begin() override {
-            return &parameterList;
+            return nodes;
         }
 
         [[nodiscard]] const shared_ptr<Node> *begin() const override {
-            return &parameterList;
+            return nodes;
         }
 
         shared_ptr<Node> *end() override {
-            return &parameterList + 1;
+            return &nodes[2];
         }
 
         [[nodiscard]] const shared_ptr<Node> *end() const override {
-            return &parameterList + 1;
+            return &nodes[2];
         }
 
-        static shared_ptr<ParameterizedDeclarator> create(shared_ptr<Node> parameterList) {
+        static shared_ptr<ParameterizedDeclarator> create(shared_ptr<Node> parameterList, shared_ptr<Node> suffix) {
             auto base = std::make_shared<ParameterizedDeclarator>();
-            base->parameterList = std::move(parameterList);
+            base->hasNext = parameterList != nullptr;
+            base->nodes[PARAMETER_LIST] = std::move(parameterList);
+            base->nodes[NEXT_SUFFIX] = std::move(suffix);
             return base;
         }
 
@@ -589,6 +633,10 @@ namespace AST {
             std::ranges::copy(parameters, base->parameters);
             return base;
         }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "ParameterList";
+        }
     };
 
     class Parameter : public Node {
@@ -622,6 +670,11 @@ namespace AST {
             base->nodes[SPEC_QUALS] = std::move(specQuals);
             base->nodes[DECLARATOR] = std::move(declarator);
             return base;
+        }
+
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "Parameter";
         }
     };
 
@@ -718,6 +771,10 @@ namespace AST {
             delete[] nodes;
         }
 
+        [[nodiscard]] shared_ptr<Node> get_declarator() const {
+            return nodes[0];
+        }
+
         [[nodiscard]] shared_ptr<Node> *begin() override {
             return nodes;
         }
@@ -734,11 +791,12 @@ namespace AST {
             return &nodes[size];
         }
 
-        static shared_ptr<TypeName> create(std::vector<shared_ptr<Node>> specQualList) {
+        static shared_ptr<TypeName> create(std::vector<shared_ptr<Node>> specQualList, shared_ptr<Node> abstractDeclarator) {
             auto base = std::make_shared<TypeName>();
-            base->nodes = new shared_ptr<Node>[specQualList.size()];
-            std::ranges::copy(specQualList.begin(), specQualList.end(), base->nodes);
-            base->size = specQualList.size();
+            base->nodes = new shared_ptr<Node>[specQualList.size() + 1];
+            base->nodes[0] = std::move(abstractDeclarator);
+            std::ranges::copy(specQualList.begin(), specQualList.end(), base->nodes + 1);
+            base->size = specQualList.size() + 1;
             return base;
         }
 

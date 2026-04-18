@@ -2,7 +2,7 @@ translation-unit := top-declaration+;
 
 top-declaration := declaration | function-declaration;
 
-function-declaration := FUNCTION_DECLARATION declaration-specifiers? declarator compound-statement;
+function-declaration := declaration-specifiers? declarator compound-statement;
 
 # statements
 
@@ -17,7 +17,7 @@ selection-statement := IF '(' expression ')' compound-statement (ELSE compound-s
 iteration-statement :=
     WHILE '(' expression ')' compound-statement
     | DO compound-statement WHILE '(' expression ')'
-    | FOR '(' expression-statement expression-statement expression? ')' compound-statement
+    | FOR '(' (expression-statement | declaration) expression-statement expression? ')' compound-statement
 
 control-statement := (BREAK | CONTINUE) ';'
 

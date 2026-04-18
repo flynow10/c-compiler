@@ -2,7 +2,7 @@ struct A {
   int a;
 };
 
-fn int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
   printf("Fibonacci numbers:\n");
   int a = 0;
   int b = 1;

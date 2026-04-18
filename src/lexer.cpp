@@ -118,15 +118,18 @@ TokenType parseKeyword(const std::string &identifier) {
 
 std::string parseNumber(std::istream &ss) {
     std::string number;
-    char currentChar;
+    bool isHex = false;
 
     do {
-        currentChar = ss.get();
+        const char currentChar = ss.get();
+        if (currentChar == 'x' || currentChar == 'X') {
+            isHex = true;
+        }
         number += currentChar;
     }
-    while (std::isdigit(currentChar) || NumberConstantChars.find(currentChar) != std::string::npos);
+    while (std::isdigit(ss.peek()) || NumberConstantChars.find(ss.peek()) != std::string::npos || (isHex && std::string("abcdefABCDEF").find(ss.peek()) != std::string::npos));
 
-    ss.seekg(-1, std::istream::cur);
+    //ss.seekg(-1, std::istream::cur);
 
     return number;
 }
@@ -182,6 +185,11 @@ void Lexer::tokenize(std::istream &code) {
         //     tokens.push_back(createToken(TokenType::Directive, parseDirective(code)));
         //     continue;
         // }
+
+        if (currentChar == '/' && code.peek() == '/') {
+            while ((currentChar = code.get()) != -1 && currentChar != '\n') {}
+            continue;
+        }
 
         if (currentChar == '"') {
             tokens.push_back(createToken(TokenType::StringLiteral, parseEscapedString(code, '"')));

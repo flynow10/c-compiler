@@ -5,62 +5,70 @@
 #include <string>
 
 #include "lexer.hpp"
-#include "parse.hpp"
+#include "parsing/parse.hpp"
 
 struct CompilerOptions {
-  std::string inFile;
-  std::string outFile;
+    std::string inFile;
+    std::string outFile;
 };
 
-int parseArgument(const std::string &argument, const int argIndex, const int argc,
+int parse_argument(const std::string &argument, const int argIndex, const int argc,
                   char **argv, CompilerOptions &options) {
-  if (argument == "-o") {
-    if (argIndex + 1 >= argc) {
-      throw std::invalid_argument("Missing output file");
+    if (argument == "-o") {
+        if (argIndex + 1 >= argc) {
+            throw std::invalid_argument("Missing output file");
+        }
+        options.outFile = argv[argIndex + 1];
+        return 2;
     }
-    options.outFile = argv[argIndex + 1];
-    return 2;
-  }
 
-  options.inFile = argument;
-  return 1;
+    options.inFile = argument;
+    return 1;
 }
 
 int main(const int argc, char *argv[]) {
-  CompilerOptions options;
+    CompilerOptions options;
 
-  try {
-    int i = 1;
-    while (i < argc) {
-      i += parseArgument(argv[i], i, argc, argv, options);
+    try {
+        int i = 1;
+        while (i < argc) {
+            i += parse_argument(argv[i], i, argc, argv, options);
+        }
+    } catch (std::invalid_argument &e) {
+        std::cout << e.what() << std::endl;
+        return 1;
     }
 
-  } catch (std::invalid_argument &e) {
-    std::cout << e.what() << std::endl;
-    return 1;
-  }
+    if (options.inFile.empty()) {
+        std::cout << "Must provide an input file" << std::endl;
+        return 1;
+    }
 
-  if (options.inFile.empty()) {
-    std::cout << "Must provide an input file" << std::endl;
-    return 1;
-  }
+    std::ifstream inputFile(options.inFile);
 
-  std::ifstream inputFile(options.inFile);
+    // Lexer lexer;
+    // lexer.tokenize(inputFile);
+    //
+    // while (lexer.has_token()) {
+    //   Token token = lexer.pop();
+    //   std::cout << token.type() << " - \"" << token.value() << "\"" << std::endl;
+    // }
+    //
+    // inputFile.seekg(0, std::ios::beg);
 
-  // Lexer lexer;
-  // lexer.tokenize(inputFile);
+    Parser parser;
 
-  // while (lexer.has_token()) {
-  //   std::cout << lexer.pop().type() << std::endl;
-  // }
+    const auto ast = parser.parse(inputFile);
 
-  Parser parser;
+    if (options.outFile.empty()) {
+        std::cout << ast << std::endl;
+    } else {
+        std::ofstream outputFile(options.outFile, std::ofstream::out | std::ofstream::trunc);
+        outputFile << ast;
+        outputFile.close();
+    }
 
-  const auto ast = parser.parse(inputFile);
+    inputFile.close();
 
-  std::cout << ast;
-
-  inputFile.close();
-
-  return 0;
+    return 0;
 }
