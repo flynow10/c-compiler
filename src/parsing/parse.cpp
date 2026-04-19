@@ -8,7 +8,7 @@
 #include <vector>
 
 using std::make_shared;
-using std::shared_ptr;
+using std::unique_ptr;
 
 const std::vector SpecQualTypes = {
     TokenType::Static,
@@ -25,22 +25,22 @@ const std::vector SpecQualTypes = {
 
 Parser::Parser() = default;
 
-shared_ptr<AST::Node> Parser::parse(std::istream &stream) {
+unique_ptr<AST::Node> Parser::parse(std::istream &stream) {
     lexer.tokenize(stream);
     return parse_translation_unit();
 }
 
-shared_ptr<AST::TranslationUnit> Parser::parse_translation_unit() {
-    std::vector<shared_ptr<AST::Node> > nodes;
+unique_ptr<AST::TranslationUnit> Parser::parse_translation_unit() {
+    std::vector<unique_ptr<AST::Node>> nodes;
     do {
         lexer.save_cursor();
-        const auto decl = parse_decl();
+        auto decl = parse_decl();
         if (decl == nullptr) {
             lexer.back_track();
             nodes.push_back(parse_function_decl());
         } else {
             lexer.succeed();
-            nodes.push_back(decl);
+            nodes.push_back(std::move(decl));
         }
     } while (lexer.peek().type() != TokenType::EndOfFile);
     lexer.eat(TokenType::EndOfFile);
@@ -48,17 +48,17 @@ shared_ptr<AST::TranslationUnit> Parser::parse_translation_unit() {
     return AST::TranslationUnit::create(nodes);
 }
 
-shared_ptr<AST::FunctionDecl> Parser::parse_function_decl() {
-    const auto specQuals = parse_decl_specifiers();
-    const auto declarator = parse_declarator();
-    const auto body = parse_compound_statement();
-    return AST::FunctionDecl::create(specQuals, declarator, body);
+unique_ptr<AST::FunctionDecl> Parser::parse_function_decl() {
+    auto specQuals = parse_decl_specifiers();
+    auto declarator = parse_declarator();
+    auto body = parse_compound_statement();
+    return AST::FunctionDecl::create(std::move(specQuals), std::move(declarator), std::move(body));
 }
 
 
-shared_ptr<AST::Decl> Parser::parse_decl() {
-    std::vector<shared_ptr<AST::Node> > specQuals;
-    std::vector<shared_ptr<AST::Node> > initDeclarators;
+unique_ptr<AST::Decl> Parser::parse_decl() {
+    std::vector<unique_ptr<AST::Node> > specQuals;
+    std::vector<unique_ptr<AST::Node> > initDeclarators;
     Token token = lexer.peek();
     while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end()) {
         if (token.type() == TokenType::Const) {
@@ -89,8 +89,8 @@ shared_ptr<AST::Decl> Parser::parse_decl() {
     return AST::Decl::create(specQuals, initDeclarators);
 }
 
-shared_ptr<AST::DeclSpecifiers> Parser::parse_decl_specifiers() {
-    std::vector<shared_ptr<AST::Node> > specQuals;
+unique_ptr<AST::DeclSpecifiers> Parser::parse_decl_specifiers() {
+    std::vector<unique_ptr<AST::Node> > specQuals;
     Token token = lexer.peek();
     while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end()) {
         if (token.type() == TokenType::Const) {
@@ -106,7 +106,7 @@ shared_ptr<AST::DeclSpecifiers> Parser::parse_decl_specifiers() {
     return AST::DeclSpecifiers::create(specQuals);
 }
 
-shared_ptr<AST::StorageClass> Parser::parse_storage_class() {
+unique_ptr<AST::StorageClass> Parser::parse_storage_class() {
     switch (lexer.peek().type()) {
         case TokenType::Static: {
             lexer.eat(TokenType::Static);
@@ -128,7 +128,7 @@ std::unordered_map<TokenType, AST::TypeSpecifier::TypeSpecifierType> typeSpecifi
     {TokenType::Signed, AST::TypeSpecifier::SIGNED},
 };
 
-shared_ptr<AST::TypeSpecifier> Parser::parse_type_specifier() {
+unique_ptr<AST::TypeSpecifier> Parser::parse_type_specifier() {
     switch (const Token token = lexer.peek(); token.type()) {
         case TokenType::Struct: {
             return parse_struct_specifier();
@@ -145,7 +145,7 @@ shared_ptr<AST::TypeSpecifier> Parser::parse_type_specifier() {
     }
 }
 
-shared_ptr<AST::StructSpecifier> Parser::parse_struct_specifier() {
+unique_ptr<AST::StructSpecifier> Parser::parse_struct_specifier() {
     lexer.eat(TokenType::Struct);
     std::string structName;
     if (lexer.peek().type() == TokenType::Identifier) {
@@ -157,17 +157,17 @@ shared_ptr<AST::StructSpecifier> Parser::parse_struct_specifier() {
 
     if (lexer.peek().type() == TokenType::LBracket) {
         lexer.eat(TokenType::LBracket);
-        const auto structDeclaration = parse_struct_decl_list();
+        auto structDeclaration = parse_struct_decl_list();
         lexer.eat(TokenType::RBracket);
 
-        return AST::StructSpecifier::create(structName, structDeclaration);
+        return AST::StructSpecifier::create(structName, std::move(structDeclaration));
     }
 
     return AST::StructSpecifier::create(structName);
 }
 
-shared_ptr<AST::StructDeclList> Parser::parse_struct_decl_list() {
-    std::vector<shared_ptr<AST::Node> > structDeclarations;
+unique_ptr<AST::StructDeclList> Parser::parse_struct_decl_list() {
+    std::vector<unique_ptr<AST::Node> > structDeclarations;
     while (lexer.peek().type() != TokenType::RBracket) {
         structDeclarations.push_back(parse_struct_decl());
     }
@@ -175,8 +175,8 @@ shared_ptr<AST::StructDeclList> Parser::parse_struct_decl_list() {
     return AST::StructDeclList::create(structDeclarations);
 }
 
-shared_ptr<AST::StructDecl> Parser::parse_struct_decl() {
-    std::vector<shared_ptr<AST::Node>> specifierQualifiers;
+unique_ptr<AST::StructDecl> Parser::parse_struct_decl() {
+    std::vector<unique_ptr<AST::Node>> specifierQualifiers;
     Token token = lexer.peek();
     while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end() && token.type() != TokenType::Static) {
         if (token.type() == TokenType::Const) {
@@ -186,13 +186,13 @@ shared_ptr<AST::StructDecl> Parser::parse_struct_decl() {
         }
         token = lexer.peek();
     }
-    const shared_ptr<AST::Node> declarator = parse_declarator();
+    unique_ptr<AST::Node> declarator = parse_declarator();
     lexer.eat(TokenType::Semicolon);
 
-    return AST::StructDecl::create(specifierQualifiers, declarator);
+    return AST::StructDecl::create(specifierQualifiers, std::move(declarator));
 }
 
-shared_ptr<AST::TypeQualifier> Parser::parse_type_qualifier() {
+unique_ptr<AST::TypeQualifier> Parser::parse_type_qualifier() {
     lexer.eat(TokenType::Const);
     return AST::TypeQualifier::create();
 }
@@ -229,53 +229,53 @@ void Parser::parse_ghost_declarator() {
 }
 */
 
-shared_ptr<AST::Declarator> Parser::parse_declarator(bool isAbstract) {
-    shared_ptr<AST::Node> pointer = nullptr;
+unique_ptr<AST::Declarator> Parser::parse_declarator(bool isAbstract) {
+    unique_ptr<AST::Node> pointer = nullptr;
     if (lexer.peek().type() == TokenType::Star) {
         pointer = parse_pointer();
     }
-    const shared_ptr<AST::Node> directDeclarator = parse_direct_declarator(isAbstract);
-    shared_ptr<AST::Node> suffix = nullptr;
+    unique_ptr<AST::Node> directDeclarator = parse_direct_declarator(isAbstract);
+    unique_ptr<AST::Node> suffix = nullptr;
 
     TokenType type = lexer.peek().type();
     while (type == TokenType::LSquare || type == TokenType::LParen) {
         if (type == TokenType::LSquare) {
-            suffix = parse_index_declarator(suffix);
+            suffix = parse_index_declarator(std::move(suffix));
         } else {
-            suffix = parse_parameterized_declarator(suffix);
+            suffix = parse_parameterized_declarator(std::move(suffix));
         }
         type = lexer.peek().type();
     }
 
-    return AST::Declarator::create(directDeclarator, pointer, suffix);
+    return AST::Declarator::create(std::move(directDeclarator), std::move(pointer), std::move(suffix));
 }
 
 
-shared_ptr<AST::Pointer> Parser::parse_pointer() {
+unique_ptr<AST::Pointer> Parser::parse_pointer() {
     lexer.eat(TokenType::Star);
-    shared_ptr<AST::Pointer> head = nullptr;
+    unique_ptr<AST::Pointer> head = nullptr;
     if (lexer.peek().type() == TokenType::Const) {
         lexer.eat(TokenType::Const);
         head = AST::Pointer::create(true);
     } else {
         head = AST::Pointer::create(false);
     }
-    shared_ptr<AST::Pointer> current = head;
+    AST::Pointer* current = head.get();
 
     while (lexer.peek().type() == TokenType::Star) {
         lexer.eat(TokenType::Star);
-        const shared_ptr<AST::Pointer> next = AST::Pointer::create(lexer.peek().type() == TokenType::Const);
+        unique_ptr<AST::Pointer> next = AST::Pointer::create(lexer.peek().type() == TokenType::Const);
         if (lexer.peek().type() == TokenType::Const) {
             lexer.eat(TokenType::Const);
         }
-        current->set_next_pointer(next);
-        current = next;
+        current->set_next_pointer(std::move(next));
+        current = current->get_next_pointer().get();
     }
 
     return head;
 }
 
-shared_ptr<AST::Node> Parser::parse_direct_declarator(const bool isAbstract) {
+unique_ptr<AST::Node> Parser::parse_direct_declarator(const bool isAbstract) {
     const auto token = lexer.peek();
     if (token.type() == TokenType::Identifier) {
         lexer.eat(TokenType::Identifier);
@@ -284,7 +284,7 @@ shared_ptr<AST::Node> Parser::parse_direct_declarator(const bool isAbstract) {
 
     if (token.type() == TokenType::LParen) {
         lexer.eat(TokenType::LParen);
-        const auto declarator = parse_declarator(isAbstract);
+        auto declarator = parse_declarator(isAbstract);
         lexer.eat(TokenType::RParen);
         return declarator;
     }
@@ -296,28 +296,28 @@ shared_ptr<AST::Node> Parser::parse_direct_declarator(const bool isAbstract) {
     throw std::runtime_error("Parsing error in direct declarator");
 }
 
-shared_ptr<AST::IndexDeclarator> Parser::parse_index_declarator(shared_ptr<AST::Node> prevSuffix) {
-    shared_ptr<AST::Node> constantExpression = nullptr;
+unique_ptr<AST::IndexDeclarator> Parser::parse_index_declarator(unique_ptr<AST::Node> prevSuffix) {
+    unique_ptr<AST::Node> constantExpression = nullptr;
     lexer.eat(TokenType::LSquare);
     if (lexer.peek().type() != TokenType::RSquare) {
         constantExpression = parse_logical_or_expression();
     }
     lexer.eat(TokenType::RSquare);
-    return AST::IndexDeclarator::create(constantExpression, std::move(prevSuffix));
+    return AST::IndexDeclarator::create(std::move(constantExpression), std::move(prevSuffix));
 }
 
-shared_ptr<AST::ParameterizedDeclarator> Parser::parse_parameterized_declarator(shared_ptr<AST::Node> prevSuffix) {
-    shared_ptr<AST::Node> parameterList = nullptr;
+unique_ptr<AST::ParameterizedDeclarator> Parser::parse_parameterized_declarator(unique_ptr<AST::Node> prevSuffix) {
+    unique_ptr<AST::Node> parameterList = nullptr;
     lexer.eat(TokenType::LParen);
     if (lexer.peek().type() != TokenType::RParen) {
         parameterList = parse_parameter_list();
     }
     lexer.eat(TokenType::RParen);
-    return AST::ParameterizedDeclarator::create(parameterList, std::move(prevSuffix));
+    return AST::ParameterizedDeclarator::create(std::move(parameterList), std::move(prevSuffix));
 }
 
-shared_ptr<AST::ParameterList> Parser::parse_parameter_list() {
-    std::vector<shared_ptr<AST::Node>> parameters;
+unique_ptr<AST::ParameterList> Parser::parse_parameter_list() {
+    std::vector<unique_ptr<AST::Node>> parameters;
     parameters.push_back(parse_parameter());
 
     while (lexer.peek().type() == TokenType::Comma) {
@@ -328,21 +328,20 @@ shared_ptr<AST::ParameterList> Parser::parse_parameter_list() {
     return AST::ParameterList::create(parameters);
 }
 
-shared_ptr<AST::Parameter> Parser::parse_parameter() {
-    const shared_ptr<AST::Node> specQual = parse_decl_specifiers();
-    shared_ptr<AST::Node> declarator = nullptr;
+unique_ptr<AST::Parameter> Parser::parse_parameter() {
+    unique_ptr<AST::Node> specQual = parse_decl_specifiers();
+    unique_ptr<AST::Node> declarator = nullptr;
     if (lexer.peek().type() != TokenType::Comma) {
         declarator = parse_declarator(true);
     }
-    return AST::Parameter::create(specQual, declarator);
+    return AST::Parameter::create(std::move(specQual), std::move(declarator));
 }
 
-
-shared_ptr<AST::InitDeclarator> Parser::parse_init_declarator() {
-    const shared_ptr<AST::Node> declarator = parse_declarator();
+unique_ptr<AST::InitDeclarator> Parser::parse_init_declarator() {
+    unique_ptr<AST::Node> declarator = parse_declarator();
     if (lexer.peek().type() == TokenType::Equal) {
         lexer.eat(TokenType::Equal);
-        shared_ptr<AST::Node> initializer;
+        unique_ptr<AST::Node> initializer;
         if (lexer.peek().type() == TokenType::LBracket) {
             lexer.eat(TokenType::LBracket);
             initializer = parse_initializer_list();
@@ -350,13 +349,13 @@ shared_ptr<AST::InitDeclarator> Parser::parse_init_declarator() {
         } else {
             initializer = parse_assignment_expression();
         }
-        return AST::InitDeclarator::create(declarator, initializer);
+        return AST::InitDeclarator::create(std::move(declarator), std::move(initializer));
     }
-    return AST::InitDeclarator::create(declarator);
+    return AST::InitDeclarator::create(std::move(declarator));
 }
 
-shared_ptr<AST::TypeName> Parser::parse_type_name() {
-    std::vector<shared_ptr<AST::Node>> specifierQualifiers;
+unique_ptr<AST::TypeName> Parser::parse_type_name() {
+    std::vector<unique_ptr<AST::Node>> specifierQualifiers;
     Token token = lexer.peek();
     while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end() && token.type() != TokenType::Static) {
         if (token.type() == TokenType::Const) {
@@ -367,13 +366,13 @@ shared_ptr<AST::TypeName> Parser::parse_type_name() {
         token = lexer.peek();
     }
 
-    const auto abstractDeclarator = parse_declarator(true);
+    auto abstractDeclarator = parse_declarator(true);
 
-    return AST::TypeName::create(specifierQualifiers, abstractDeclarator);
+    return AST::TypeName::create(specifierQualifiers, std::move(abstractDeclarator));
 }
 
-shared_ptr<AST::InitializerList> Parser::parse_initializer_list() {
-    std::vector<shared_ptr<AST::Node> > initializers;
+unique_ptr<AST::InitializerList> Parser::parse_initializer_list() {
+    std::vector<unique_ptr<AST::Node> > initializers;
     while (lexer.peek().type() != TokenType::RBracket) {
         if (lexer.peek().type() == TokenType::LBracket) {
             lexer.eat(TokenType::LBracket);
@@ -390,9 +389,9 @@ shared_ptr<AST::InitializerList> Parser::parse_initializer_list() {
     return AST::InitializerList::create(initializers);
 }
 
-shared_ptr<AST::CompoundStatement> Parser::parse_compound_statement() {
+unique_ptr<AST::CompoundStatement> Parser::parse_compound_statement() {
     lexer.eat(TokenType::LBracket);
-    std::vector<shared_ptr<AST::Node> > nodes;
+    std::vector<unique_ptr<AST::Node> > nodes;
     while (lexer.peek().type() != TokenType::RBracket) {
         //lexer.save_cursor();
         // if (auto declaration = parse_decl(); declaration != nullptr) {
@@ -407,13 +406,13 @@ shared_ptr<AST::CompoundStatement> Parser::parse_compound_statement() {
         if (statement == nullptr) {
             throw std::runtime_error("Parsing error in compound statement");
         }
-        nodes.push_back(statement);
+        nodes.push_back(std::move(statement));
     }
     lexer.eat(TokenType::RBracket);
     return AST::CompoundStatement::create(nodes);
 }
 
-shared_ptr<AST::Statement> Parser::parse_statement() {
+unique_ptr<AST::Statement> Parser::parse_statement() {
     switch (lexer.peek().type()) {
         case TokenType::If: {
             return parse_selection_statement();
@@ -436,51 +435,51 @@ shared_ptr<AST::Statement> Parser::parse_statement() {
             return parse_compound_statement();
         }
         default: {
-            const auto expression = parse_expression();
+            auto expression = parse_expression();
             lexer.eat(TokenType::Semicolon);
-            return AST::ExpressionStatement::create(expression);
+            return AST::ExpressionStatement::create(std::move(expression));
         }
     }
 }
 
-shared_ptr<AST::SelectionStatement> Parser::parse_selection_statement() {
+unique_ptr<AST::SelectionStatement> Parser::parse_selection_statement() {
     lexer.eat(TokenType::If);
     lexer.eat(TokenType::LParen);
-    const auto condition = parse_expression();
+    auto condition = parse_expression();
     lexer.eat(TokenType::RParen);
-    const auto thenBody = parse_compound_statement();
+    auto thenBody = parse_compound_statement();
     if (lexer.peek().type() == TokenType::Else) {
         lexer.eat(TokenType::Else);
-        const auto elseBody = parse_compound_statement();
-        return AST::SelectionStatement::create(condition, thenBody, elseBody);
+        auto elseBody = parse_compound_statement();
+        return AST::SelectionStatement::create(std::move(condition), std::move(thenBody), std::move(elseBody));
     }
-    return AST::SelectionStatement::create(condition, thenBody);
+    return AST::SelectionStatement::create(std::move(condition), std::move(thenBody));
 }
 
-shared_ptr<AST::WhileStatement> Parser::parse_while_statement() {
+unique_ptr<AST::WhileStatement> Parser::parse_while_statement() {
     lexer.eat(TokenType::While);
     lexer.eat(TokenType::LParen);
-    const auto condition = parse_expression();
+    auto condition = parse_expression();
     lexer.eat(TokenType::RParen);
-    const auto body = parse_compound_statement();
-    return AST::WhileStatement::create(condition, body);
+    auto body = parse_compound_statement();
+    return AST::WhileStatement::create(std::move(condition), std::move(body));
 }
 
-shared_ptr<AST::DoStatement> Parser::parse_do_statement() {
+unique_ptr<AST::DoStatement> Parser::parse_do_statement() {
     lexer.eat(TokenType::Do);
     auto body = parse_compound_statement();
     lexer.eat(TokenType::While);
     lexer.eat(TokenType::LParen);
-    const auto condition = parse_expression();
+    auto condition = parse_expression();
     lexer.eat(TokenType::RParen);
     lexer.eat(TokenType::Semicolon);
-    return AST::DoStatement::create(condition, body);
+    return AST::DoStatement::create(std::move(condition), std::move(body));
 }
 
-shared_ptr<AST::ForStatement> Parser::parse_for_statement() {
+unique_ptr<AST::ForStatement> Parser::parse_for_statement() {
     lexer.eat(TokenType::For);
     lexer.eat(TokenType::LParen);
-    shared_ptr<AST::Node> initialization = nullptr, condition = nullptr, increment = nullptr;
+    unique_ptr<AST::Node> initialization = nullptr, condition = nullptr, increment = nullptr;
     if (lexer.peek().type() != TokenType::Semicolon) {
         if (std::ranges::find(SpecQualTypes, lexer.peek().type()) == SpecQualTypes.end()) {
             initialization = parse_expression();
@@ -499,11 +498,11 @@ shared_ptr<AST::ForStatement> Parser::parse_for_statement() {
         increment = parse_expression();
     }
     lexer.eat(TokenType::RParen);
-    const auto body = parse_compound_statement();
-    return AST::ForStatement::create(body, initialization, condition, increment);
+    auto body = parse_compound_statement();
+    return AST::ForStatement::create(std::move(body), std::move(initialization), std::move(condition), std::move(increment));
 }
 
-shared_ptr<AST::ControlStatement> Parser::parse_control_statement() {
+unique_ptr<AST::ControlStatement> Parser::parse_control_statement() {
     switch (lexer.peek().type()) {
         case TokenType::Break: {
             lexer.eat(TokenType::Break);
@@ -518,9 +517,9 @@ shared_ptr<AST::ControlStatement> Parser::parse_control_statement() {
         case TokenType::Return: {
             lexer.eat(TokenType::Return);
             if (lexer.peek().type() != TokenType::Semicolon) {
-                const auto expression = parse_expression();
+                auto expression = parse_expression();
                 lexer.eat(TokenType::Semicolon);
-                return AST::ControlStatement::create(expression);
+                return AST::ControlStatement::create(std::move(expression));
             }
             lexer.eat(TokenType::Semicolon);
             return AST::ControlStatement::create(AST::ControlStatement::RETURN);
@@ -531,19 +530,19 @@ shared_ptr<AST::ControlStatement> Parser::parse_control_statement() {
     }
 }
 
-shared_ptr<AST::Expression> Parser::parse_expression() {
+unique_ptr<AST::Expression> Parser::parse_expression() {
     return parse_expression_list(false);
 }
 
-shared_ptr<AST::Expression> Parser::parse_expression_list(bool requireSurround) {
-    std::vector<shared_ptr<AST::Expression>> expressions;
+unique_ptr<AST::Expression> Parser::parse_expression_list(bool requireSurround) {
+    std::vector<unique_ptr<AST::Expression>> expressions;
     expressions.push_back(parse_assignment_expression());
     while (lexer.peek().type() == TokenType::Comma) {
         lexer.eat(TokenType::Comma);
         expressions.push_back(parse_assignment_expression());
     }
     if (!requireSurround && expressions.size() == 1) {
-        return expressions[0];
+        return std::move(expressions[0]);
     }
     return AST::ExpressionList::create(expressions);
 }
@@ -562,73 +561,73 @@ const std::unordered_map<TokenType, AST::Assignment::Op> AssignmentOperatorMap =
     {TokenType::ModAssign, AST::Assignment::Op::MOD},
 };
 
-shared_ptr<AST::Expression> Parser::parse_assignment_expression() {
-    shared_ptr<AST::Expression> lhs = parse_logical_or_expression();
+unique_ptr<AST::Expression> Parser::parse_assignment_expression() {
+    unique_ptr<AST::Expression> lhs = parse_logical_or_expression();
     if (AssignmentOperatorMap.contains(lexer.peek().type())) {
         const AST::Assignment::Op op = AssignmentOperatorMap.at(lexer.pop().type());
-        const shared_ptr<AST::Expression> rhs = parse_assignment_expression();
-        return AST::Assignment::create(lhs, rhs, op);
+        unique_ptr<AST::Expression> rhs = parse_assignment_expression();
+        return AST::Assignment::create(std::move(lhs), std::move(rhs), op);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_logical_or_expression() {
-    shared_ptr<AST::Expression> lhs = parse_logical_and_expression();
+unique_ptr<AST::Expression> Parser::parse_logical_or_expression() {
+    unique_ptr<AST::Expression> lhs = parse_logical_and_expression();
     if (lexer.peek().type() == TokenType::OrOp) {
         lexer.pop();
-        const auto rhs = parse_logical_or_expression();
-        return AST::BinOp::create(lhs, rhs, AST::BinOp::LOGIC_OR);
+        auto rhs = parse_logical_or_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), AST::BinOp::LOGIC_OR);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_logical_and_expression() {
-    shared_ptr<AST::Expression> lhs = parse_inclusive_or_expression();
+unique_ptr<AST::Expression> Parser::parse_logical_and_expression() {
+    unique_ptr<AST::Expression> lhs = parse_inclusive_or_expression();
     if (lexer.peek().type() == TokenType::AndOp) {
         lexer.pop();
-        const auto rhs = parse_logical_and_expression();
-        return AST::BinOp::create(lhs, rhs, AST::BinOp::LOGIC_AND);
+        auto rhs = parse_logical_and_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), AST::BinOp::LOGIC_AND);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_inclusive_or_expression() {
-    shared_ptr<AST::Expression> lhs = parse_exclusive_or_expression();
+unique_ptr<AST::Expression> Parser::parse_inclusive_or_expression() {
+    unique_ptr<AST::Expression> lhs = parse_exclusive_or_expression();
     if (lexer.peek().type() == TokenType::Pipe) {
         lexer.pop();
-        const auto rhs = parse_inclusive_or_expression();
-        return AST::BinOp::create(lhs, rhs, AST::BinOp::INCLUSIVE_OR);
+        auto rhs = parse_inclusive_or_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), AST::BinOp::INCLUSIVE_OR);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_exclusive_or_expression() {
-    shared_ptr<AST::Expression> lhs = parse_and_expression();
+unique_ptr<AST::Expression> Parser::parse_exclusive_or_expression() {
+    unique_ptr<AST::Expression> lhs = parse_and_expression();
     if (lexer.peek().type() == TokenType::Caret) {
         lexer.pop();
-        const auto rhs = parse_exclusive_or_expression();
-        return AST::BinOp::create(lhs, rhs, AST::BinOp::EXCLUSIVE_OR);
+        auto rhs = parse_exclusive_or_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), AST::BinOp::EXCLUSIVE_OR);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_and_expression() {
-    shared_ptr<AST::Expression> lhs = parse_equality_expression();
+unique_ptr<AST::Expression> Parser::parse_and_expression() {
+    unique_ptr<AST::Expression> lhs = parse_equality_expression();
     if (lexer.peek().type() == TokenType::Ampersand) {
         lexer.pop();
-        const auto rhs = parse_and_expression();
-        return AST::BinOp::create(lhs, rhs, AST::BinOp::AND);
+        auto rhs = parse_and_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), AST::BinOp::AND);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_equality_expression() {
-    shared_ptr<AST::Expression> lhs = parse_relation_expression();
+unique_ptr<AST::Expression> Parser::parse_equality_expression() {
+    unique_ptr<AST::Expression> lhs = parse_relation_expression();
     const TokenType type = lexer.peek().type();
     if (type == TokenType::EqOp || type == TokenType::NeOp) {
         lexer.pop();
-        const auto rhs = parse_equality_expression();
-        return AST::BinOp::create(lhs, rhs, type == TokenType::EqOp ? AST::BinOp::EQUAL : AST::BinOp::NOT_EQUAL);
+        auto rhs = parse_equality_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), type == TokenType::EqOp ? AST::BinOp::EQUAL : AST::BinOp::NOT_EQUAL);
     }
     return lhs;
 }
@@ -640,35 +639,35 @@ const std::unordered_map<TokenType, AST::BinOp::Op> RelationExpressionMap = {
     {TokenType::GeOp, AST::BinOp::Op::GREATER_EQUAL},
 };
 
-shared_ptr<AST::Expression> Parser::parse_relation_expression() {
-    shared_ptr<AST::Expression> lhs = parse_shift_expression();
+unique_ptr<AST::Expression> Parser::parse_relation_expression() {
+    unique_ptr<AST::Expression> lhs = parse_shift_expression();
     const TokenType type = lexer.peek().type();
     if (RelationExpressionMap.contains(type)) {
         lexer.pop();
-        const auto rhs = parse_relation_expression();
-        return AST::BinOp::create(lhs, rhs, RelationExpressionMap.at(type));
+        auto rhs = parse_relation_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), RelationExpressionMap.at(type));
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_shift_expression() {
-    shared_ptr<AST::Expression> lhs = parse_additive_expression();
+unique_ptr<AST::Expression> Parser::parse_shift_expression() {
+    unique_ptr<AST::Expression> lhs = parse_additive_expression();
     const TokenType type = lexer.peek().type();
     if (type == TokenType::LeftOp || type == TokenType::RightOp) {
         lexer.pop();
-        const auto rhs = parse_shift_expression();
-        return AST::BinOp::create(lhs, rhs, type == TokenType::LeftOp ? AST::BinOp::LEFT_SHIFT : AST::BinOp::RIGHT_SHIFT);
+        auto rhs = parse_shift_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), type == TokenType::LeftOp ? AST::BinOp::LEFT_SHIFT : AST::BinOp::RIGHT_SHIFT);
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_additive_expression() {
-    shared_ptr<AST::Expression> lhs = parse_multiplicative_expression();
+unique_ptr<AST::Expression> Parser::parse_additive_expression() {
+    unique_ptr<AST::Expression> lhs = parse_multiplicative_expression();
     const TokenType type = lexer.peek().type();
     if (type == TokenType::Plus || type == TokenType::Minus) {
         lexer.pop();
-        const auto rhs = parse_additive_expression();
-        return AST::BinOp::create(lhs, rhs, type == TokenType::Plus ? AST::BinOp::ADD : AST::BinOp::SUB);
+        auto rhs = parse_additive_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), type == TokenType::Plus ? AST::BinOp::ADD : AST::BinOp::SUB);
     }
     return lhs;
 }
@@ -678,27 +677,27 @@ const std::unordered_map<TokenType, AST::BinOp::Op> MultiplicativeOperatorMap = 
     {TokenType::Slash, AST::BinOp::Op::DIV},
     {TokenType::Percent, AST::BinOp::Op::MOD},
 };
-shared_ptr<AST::Expression> Parser::parse_multiplicative_expression() {
-    shared_ptr<AST::Expression> lhs = parse_cast_expression();
+unique_ptr<AST::Expression> Parser::parse_multiplicative_expression() {
+    unique_ptr<AST::Expression> lhs = parse_cast_expression();
     const TokenType type = lexer.peek().type();
     if (MultiplicativeOperatorMap.contains(type)) {
         lexer.pop();
-        const auto rhs = parse_multiplicative_expression();
-        return AST::BinOp::create(lhs, rhs, MultiplicativeOperatorMap.at(type));
+        auto rhs = parse_multiplicative_expression();
+        return AST::BinOp::create(std::move(lhs), std::move(rhs), MultiplicativeOperatorMap.at(type));
     }
     return lhs;
 }
 
-shared_ptr<AST::Expression> Parser::parse_cast_expression() {
-    shared_ptr<AST::Node> typeName = nullptr;
+unique_ptr<AST::Expression> Parser::parse_cast_expression() {
+    unique_ptr<AST::Node> typeName = nullptr;
     if (lexer.peek().type() == TokenType::LParen && std::ranges::find(SpecQualTypes, lexer.peek(1).type()) != SpecQualTypes.end()) {
         lexer.pop();
         typeName = parse_type_name();
         lexer.eat(TokenType::RParen);
     }
-    shared_ptr<AST::Expression> expr = parse_unary_expression();
+    unique_ptr<AST::Expression> expr = parse_unary_expression();
     if (typeName != nullptr) {
-        return AST::Cast::create(typeName, expr);
+        return AST::Cast::create(std::move(typeName), std::move(expr));
     }
     return expr;
 }
@@ -712,25 +711,25 @@ const std::unordered_map<TokenType, AST::UnaryOp::Op> UnaryOperatorMap = {
     {TokenType::Bang, AST::UnaryOp::INVERT},
 };
 
-shared_ptr<AST::Expression> Parser::parse_unary_expression() {
+unique_ptr<AST::Expression> Parser::parse_unary_expression() {
     const TokenType type = lexer.peek().type();
     switch (type) {
         case TokenType::IncOp:
         case TokenType::DecOp: {
             lexer.pop();
-            const auto rhs = parse_unary_expression();
-            return AST::UnaryOp::create(rhs, type == TokenType::IncOp ? AST::UnaryOp::INCREMENT : AST::UnaryOp::DECREMENT);
+            auto rhs = parse_unary_expression();
+            return AST::UnaryOp::create(std::move(rhs), type == TokenType::IncOp ? AST::UnaryOp::INCREMENT : AST::UnaryOp::DECREMENT);
         }
         case TokenType::Sizeof: {
             lexer.pop();
             if (lexer.peek().type() == TokenType::LParen) {
                 lexer.pop();
-                const auto typeName = parse_type_name();
+                auto typeName = parse_type_name();
                 lexer.eat(TokenType::RParen);
-                return AST::SizeofType::create(typeName);
+                return AST::SizeofType::create(std::move(typeName));
             }
-            const auto rhs = parse_unary_expression();
-            return AST::UnaryOp::create(rhs, AST::UnaryOp::SIZEOF);
+            auto rhs = parse_unary_expression();
+            return AST::UnaryOp::create(std::move(rhs), AST::UnaryOp::SIZEOF);
         }
         default: {
             break;
@@ -739,8 +738,8 @@ shared_ptr<AST::Expression> Parser::parse_unary_expression() {
 
     if (UnaryOperatorMap.contains(type)) {
         lexer.pop();
-        const auto rhs = parse_cast_expression();
-        return AST::UnaryOp::create(rhs, UnaryOperatorMap.at(type));
+        auto rhs = parse_cast_expression();
+        return AST::UnaryOp::create(std::move(rhs), UnaryOperatorMap.at(type));
     }
 
     return parse_postfix_expression();
@@ -755,32 +754,32 @@ constexpr TokenType PostfixTokens[] = {
     TokenType::DecOp,
 };
 
-shared_ptr<AST::Expression> Parser::parse_postfix_expression() {
+unique_ptr<AST::Expression> Parser::parse_postfix_expression() {
     auto primaryExpression = parse_primary_expression();
     TokenType type = lexer.peek().type();
     while (std::ranges::find(PostfixTokens, type) != std::end(PostfixTokens)) {
         if (type == TokenType::LSquare) {
             lexer.pop();
-            const auto index = parse_expression();
+            auto index = parse_expression();
             lexer.eat(TokenType::RSquare);
-            primaryExpression = AST::IndexExpression::create(primaryExpression, index);
+            primaryExpression = AST::IndexExpression::create(std::move(primaryExpression), std::move(index));
         } else if (type == TokenType::LParen) {
             lexer.pop();
             if (lexer.peek().type() == TokenType::RParen) {
                 lexer.pop();
-                primaryExpression = AST::FunctionCall::create(primaryExpression);
+                primaryExpression = AST::FunctionCall::create(std::move(primaryExpression));
             } else {
-                const auto argumentList = parse_expression_list(true);
+                auto argumentList = parse_expression_list(true);
                 lexer.eat(TokenType::RParen);
-                primaryExpression = AST::FunctionCall::create(primaryExpression, argumentList);
+                primaryExpression = AST::FunctionCall::create(std::move(primaryExpression), std::move(argumentList));
             }
         } else if (type == TokenType::IncOp || type == TokenType::DecOp) {
             lexer.pop();
-            primaryExpression = AST::PostAssignment::create(primaryExpression, type == TokenType::IncOp ? AST::PostAssignment::AssignmentType::INCREMENT : AST::PostAssignment::AssignmentType::DECREMENT);
+            primaryExpression = AST::PostAssignment::create(std::move(primaryExpression), type == TokenType::IncOp ? AST::PostAssignment::AssignmentType::INCREMENT : AST::PostAssignment::AssignmentType::DECREMENT);
         } else {
             lexer.pop();
             const Token identifier = lexer.eat(TokenType::Identifier);
-            primaryExpression = AST::MemberAccess::create(primaryExpression, type == TokenType::PtrOp ? AST::MemberAccess::MemberAccessType::POINTER : AST::MemberAccess::MemberAccessType::MEMBER, identifier.value());
+            primaryExpression = AST::MemberAccess::create(std::move(primaryExpression), type == TokenType::PtrOp ? AST::MemberAccess::MemberAccessType::POINTER : AST::MemberAccess::MemberAccessType::MEMBER, identifier.value());
         }
         type = lexer.peek().type();
     }
@@ -788,7 +787,7 @@ shared_ptr<AST::Expression> Parser::parse_postfix_expression() {
     return primaryExpression;
 }
 
-shared_ptr<AST::Expression> Parser::parse_primary_expression() {
+unique_ptr<AST::Expression> Parser::parse_primary_expression() {
     switch (lexer.peek().type()) {
         case TokenType::Identifier: {
             return AST::Identifier::create(lexer.eat(TokenType::Identifier).value());
@@ -801,7 +800,7 @@ shared_ptr<AST::Expression> Parser::parse_primary_expression() {
         }
         case TokenType::LParen: {
             lexer.pop();
-            const auto expr = parse_expression();
+            auto expr = parse_expression();
             lexer.eat(TokenType::RParen);
             return expr;
         }

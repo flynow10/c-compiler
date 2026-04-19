@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-std::string AST::to_string(const shared_ptr<Node> &node, int indent) {
+std::string AST::to_string(const Node *node, const int indent) {
     std::stringstream result;
     const auto spaces = std::string(indent, '|');
 
@@ -16,7 +16,7 @@ std::string AST::to_string(const shared_ptr<Node> &node, int indent) {
 
     for (const auto &child: *node) {
         if (child == nullptr) continue;
-        result << AST::to_string(child, indent + 1);
+        result << to_string(child.get(), indent + 1);
     }
     return result.str();
 }

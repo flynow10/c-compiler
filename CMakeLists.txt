@@ -12,6 +12,13 @@ add_executable(c_compiler src/main.cpp
         src/parsing/ast.cpp
         src/sema/Sema.cpp
         src/sema/Sema.hpp
+        src/gen/mips/mips_target.cpp
+        src/gen/mips/mips_target.hpp
+        src/gen/ASM_gen.cpp
+        src/gen/ASM_gen.hpp
+        src/sema/symbol_table.cpp
+        src/sema/symbol_table.hpp
+        src/casting.hpp
 )
 add_executable(c_compiler_test test/main.cpp
         test/execute.cpp

@@ -5,7 +5,6 @@
 struct Move {
     short move_value;
     struct Move *next;
-    void *(*make_move(void))(void);
 };
 
 struct Coordinate {
