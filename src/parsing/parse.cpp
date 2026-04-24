@@ -89,18 +89,21 @@ unique_ptr<AST::Decl> Parser::parse_decl() {
     return AST::Decl::create(specQuals, initDeclarators);
 }
 
-unique_ptr<AST::DeclSpecifiers> Parser::parse_decl_specifiers() {
+unique_ptr<AST::DeclSpecifiers> Parser::parse_decl_specifiers(std::initializer_list<TokenType> excludedTypes) {
     std::vector<unique_ptr<AST::Node> > specQuals;
     Token token = lexer.peek();
-    while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end()) {
-        if (token.type() == TokenType::Const) {
+    TokenType type = token.type();
+    while (std::ranges::find(SpecQualTypes, type) != SpecQualTypes.end()
+        && std::ranges::find(excludedTypes, type) == excludedTypes.end()) {
+        if (type == TokenType::Const) {
             specQuals.push_back(parse_type_qualifier());
-        } else if (token.type() == TokenType::Static) {
+        } else if (type == TokenType::Static) {
             specQuals.push_back(parse_storage_class());
         } else {
             specQuals.push_back(parse_type_specifier());
         }
         token = lexer.peek();
+        type = token.type();
     }
 
     return AST::DeclSpecifiers::create(specQuals);
@@ -176,20 +179,11 @@ unique_ptr<AST::StructDeclList> Parser::parse_struct_decl_list() {
 }
 
 unique_ptr<AST::StructDecl> Parser::parse_struct_decl() {
-    std::vector<unique_ptr<AST::Node>> specifierQualifiers;
-    Token token = lexer.peek();
-    while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end() && token.type() != TokenType::Static) {
-        if (token.type() == TokenType::Const) {
-            specifierQualifiers.push_back(parse_type_qualifier());
-        } else {
-            specifierQualifiers.push_back(parse_type_specifier());
-        }
-        token = lexer.peek();
-    }
+    unique_ptr<AST::Node> spec_quals = parse_decl_specifiers({TokenType::Static});
     unique_ptr<AST::Node> declarator = parse_declarator();
     lexer.eat(TokenType::Semicolon);
 
-    return AST::StructDecl::create(specifierQualifiers, std::move(declarator));
+    return AST::StructDecl::create(std::move(spec_quals), std::move(declarator));
 }
 
 unique_ptr<AST::TypeQualifier> Parser::parse_type_qualifier() {
@@ -355,20 +349,10 @@ unique_ptr<AST::InitDeclarator> Parser::parse_init_declarator() {
 }
 
 unique_ptr<AST::TypeName> Parser::parse_type_name() {
-    std::vector<unique_ptr<AST::Node>> specifierQualifiers;
-    Token token = lexer.peek();
-    while (std::ranges::find(SpecQualTypes, token.type()) != SpecQualTypes.end() && token.type() != TokenType::Static) {
-        if (token.type() == TokenType::Const) {
-            specifierQualifiers.push_back(parse_type_qualifier());
-        } else {
-            specifierQualifiers.push_back(parse_type_specifier());
-        }
-        token = lexer.peek();
-    }
-
+    auto specifierQualifiers = parse_decl_specifiers({TokenType::Static});
     auto abstractDeclarator = parse_declarator(true);
 
-    return AST::TypeName::create(specifierQualifiers, std::move(abstractDeclarator));
+    return AST::TypeName::create(std::move(specifierQualifiers), std::move(abstractDeclarator));
 }
 
 unique_ptr<AST::InitializerList> Parser::parse_initializer_list() {

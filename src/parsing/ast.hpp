@@ -485,27 +485,17 @@ namespace AST {
     };
 
     class StructDecl : public Node {
-        unique_ptr<Node> *nodes = nullptr;
-        size_t size = 0;
+        enum {DECL_SPECS, DECLARATOR};
+        unique_ptr<Node> nodes[2];
     public:
         StructDecl() : Node(NK_StructDecl) {}
-        ~StructDecl() override {
-            delete[] nodes;
-        }
-        [[nodiscard]] size_t get_size() const {
-            return size;
-        }
 
         [[nodiscard]] Node *get_declarator() const {
-            return nodes[0].get();
+            return nodes[DECLARATOR].get();
         }
 
-        [[nodiscard]] Node *get_spec_qual(const size_t index) const {
-            return nodes[index + 1].get();
-        }
-
-        [[nodiscard]] size_t get_num_spec_quals() const {
-            return size - 1;
+        [[nodiscard]] Node *get_spec_qual() const {
+            return nodes[DECL_SPECS].get();
         }
 
         unique_ptr<Node> *begin() override {
@@ -517,22 +507,18 @@ namespace AST {
         }
 
         unique_ptr<Node> *end() override {
-            return nodes + size + 1;
+            return nodes + 2;
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return nodes + size + 1;
+            return nodes + 2;
         }
 
-        static unique_ptr<StructDecl> create(std::vector<unique_ptr<Node>> &specifier_quals,
+        static unique_ptr<StructDecl> create(unique_ptr<Node> specifier_quals,
                                              unique_ptr<Node> declarator) {
             auto base = std::make_unique<StructDecl>();
-            base->nodes = new unique_ptr<Node>[specifier_quals.size() + 1];
-            base->nodes[0] = std::move(declarator);
-            base->size = specifier_quals.size();
-            for (size_t i = 0; i < specifier_quals.size(); i++) {
-                base->nodes[i + 1] = std::move(specifier_quals[i]);
-            }
+            base->nodes[DECL_SPECS] = std::move(specifier_quals);
+            base->nodes[DECLARATOR] = std::move(declarator);
             return base;
         }
 
@@ -979,16 +965,17 @@ namespace AST {
 
     // TODO: Implement abstract declarator handling
     class TypeName : public Node {
-        unique_ptr<Node> *nodes = nullptr;
-        size_t size = 0;
+        enum {DECL_SPECS, ABSTRACT_DECLARATOR};
+        unique_ptr<Node> nodes[2];
     public:
         TypeName() : Node(NK_TypeName) {}
-        ~TypeName() override {
-            delete[] nodes;
+
+        [[nodiscard]] Node *get_declarator() const {
+            return nodes[ABSTRACT_DECLARATOR].get();
         }
 
-        [[nodiscard]] const unique_ptr<Node> &get_declarator() const {
-            return nodes[0];
+        [[nodiscard]] Node *get_decl_specs() const {
+            return nodes[DECL_SPECS].get();
         }
 
         [[nodiscard]] unique_ptr<Node> *begin() override {
@@ -1000,21 +987,17 @@ namespace AST {
         }
 
         [[nodiscard]] unique_ptr<Node> *end() override {
-            return &nodes[size];
+            return nodes + 2;
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return &nodes[size];
+            return nodes + 2;
         }
 
-        static unique_ptr<TypeName> create(std::vector<unique_ptr<Node>> &specQualList, unique_ptr<Node> abstractDeclarator) {
+        static unique_ptr<TypeName> create(unique_ptr<Node> declSpecs, unique_ptr<Node> abstractDeclarator) {
             auto base = std::make_unique<TypeName>();
-            base->nodes = new unique_ptr<Node>[specQualList.size() + 1];
-            base->nodes[0] = std::move(abstractDeclarator);
-            for (size_t i = 0; i < specQualList.size(); i++) {
-                base->nodes[i + 1] = std::move(specQualList[i]);
-            }
-            base->size = specQualList.size() + 1;
+            base->nodes[DECL_SPECS] = std::move(declSpecs);
+            base->nodes[ABSTRACT_DECLARATOR] = std::move(abstractDeclarator);
             return base;
         }
 

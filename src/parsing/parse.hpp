@@ -20,7 +20,7 @@ private:
   unique_ptr<AST::TranslationUnit> parse_translation_unit();
   unique_ptr<AST::FunctionDecl> parse_function_decl();
   unique_ptr<AST::Decl> parse_decl();
-  unique_ptr<AST::DeclSpecifiers> parse_decl_specifiers();
+  unique_ptr<AST::DeclSpecifiers> parse_decl_specifiers(std::initializer_list<TokenType> excludedTypes = {});
   unique_ptr<AST::StorageClass> parse_storage_class();
   unique_ptr<AST::TypeSpecifier> parse_type_specifier();
   unique_ptr<AST::StructSpecifier> parse_struct_specifier();
