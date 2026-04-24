@@ -9,7 +9,7 @@
 #include <vector>
 
 
-struct symbol_table {
+struct SymbolTable {
 public:
     enum PrimitiveType {
         Void,
@@ -17,12 +17,17 @@ public:
         Int,
         Short,
         Char,
+        UnsignedLong,
+        UnsignedInt,
+        UnsignedShort,
+        UnsignedChar,
         Struct,
     };
     struct Entry {
     public:
         std::string identifier;
         PrimitiveType stype;
+        bool incomplete = false;
         short indirection = 0;
         // Used to reference struct types
         Entry *ctype = nullptr;
@@ -40,14 +45,14 @@ public:
         static Entry create(const std::string &identifier, PrimitiveType stype, short indirection, Entry *ctype);
     };
 
-    symbol_table(symbol_table &) = delete;
-    symbol_table & operator=(const symbol_table &) = delete;
+    SymbolTable(SymbolTable &) = delete;
+    SymbolTable & operator=(const SymbolTable &) = delete;
 
     std::map<std::string, Entry> structs;
     std::map<std::string, Entry> symbols;
-    symbol_table *parent_scope = nullptr;
+    SymbolTable *parent_scope = nullptr;
 
-    explicit symbol_table(symbol_table * parent) : parent_scope(parent) {
+    explicit SymbolTable(SymbolTable * parent) : parent_scope(parent) {
     }
 
 
@@ -56,6 +61,10 @@ public:
     Entry *addSymbol(const std::string &identifier, PrimitiveType stype, short indirection, Entry *ctype);
 
     Entry *addMember(const std::string &structIdentifier, const std::string &memberIdentifier, PrimitiveType stype, short indirection, Entry *ctype);
+
+    Entry *tryFindStruct(const std::string &identifier);
+
+    Entry *tryFindSymbol(const std::string &identifier);
 
     Entry *findStruct(const std::string &identifier);
 

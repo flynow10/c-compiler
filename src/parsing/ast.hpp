@@ -15,7 +15,6 @@ using std::unique_ptr;
 namespace AST {
     class Node;
     class Statement;
-    class Decl;
     class Expression;
     class CompoundStatement;
 
@@ -217,8 +216,16 @@ namespace AST {
             return nodes + num_spec_quals + num_declarators;
         }
 
-        unique_ptr<Node> &operator[](std::size_t index) const {
-            return nodes[index];
+        Node *operator[](const std::size_t index) const {
+            return nodes[index].get();
+        }
+
+        [[nodiscard]] Node *get_spec_qual(const std::size_t index) const {
+            return this->operator[](index);
+        }
+
+        [[nodiscard]] Node *get_declarator(const std::size_t index) const {
+            return this->operator[](index + num_spec_quals);
         }
 
         static unique_ptr<Decl> create(std::vector<unique_ptr<Node> > &spec_quals,
@@ -381,6 +388,22 @@ namespace AST {
             return &structDeclaration + 1;
         }
 
+        [[nodiscard]] bool has_struct_name() const {
+            return hasStructName;
+        }
+
+        [[nodiscard]] bool has_declaration() const {
+            return hasDeclaration;
+        }
+
+        [[nodiscard]] const std::string & get_identifier() const {
+            return structName;
+        }
+
+        [[nodiscard]] Node *get_declaration() const {
+            return structDeclaration.get();
+        }
+
         static unique_ptr<StructSpecifier> create(const std::string &structName) {
             auto base = std::make_unique<StructSpecifier>();
             base->structName = structName;
@@ -473,8 +496,16 @@ namespace AST {
             return size;
         }
 
-        [[nodiscard]] unique_ptr<Node> &get_declarator() const {
-            return nodes[0];
+        [[nodiscard]] Node *get_declarator() const {
+            return nodes[0].get();
+        }
+
+        [[nodiscard]] Node *get_spec_qual(const size_t index) const {
+            return nodes[index + 1].get();
+        }
+
+        [[nodiscard]] size_t get_num_spec_quals() const {
+            return size - 1;
         }
 
         unique_ptr<Node> *begin() override {

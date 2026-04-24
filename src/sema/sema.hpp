@@ -9,13 +9,18 @@
 #include "symbol_table.hpp"
 #include "../parsing/ast.hpp"
 
+using namespace AST;
+
 class Sema {
 private:
-    symbol_table globalTable = symbol_table(nullptr);
+    SymbolTable globalTable = SymbolTable(nullptr);
+    SymbolTable *localTable = &globalTable;
 public:
-    void acceptAST(AST::Node *ast);
-    void acceptDecl(AST::Decl *decl);
-    void acceptFunctionDecl(AST::FunctionDecl *functionDecl);
+    void acceptAST(Node *ast);
+    void acceptDecl(Decl *decl);
+    SymbolTable::Entry *acceptStructSpecifier(StructSpecifier *specifier, bool couldBeForwardDecl);
+    void acceptStructDecl(const std::string &identifier, StructDeclList *declList);
+    void acceptFunctionDecl(FunctionDecl *functionDecl);
 };
 
 #endif //SEMA_HPP

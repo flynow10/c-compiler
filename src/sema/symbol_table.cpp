@@ -4,22 +4,26 @@
 
 #include "symbol_table.hpp"
 
-symbol_table::Entry symbol_table::Entry::create(const std::string &identifier, const PrimitiveType stype,
+SymbolTable::Entry SymbolTable::Entry::create(const std::string &identifier, const PrimitiveType stype,
                                                 const short indirection, Entry *ctype) {
     Entry entry = { .identifier = identifier, .stype = stype, .indirection = indirection, .ctype = ctype };
     if (indirection != 0) {
         entry.size = 4;
     } else {
         switch (stype) {
+            case UnsignedLong:
             case Long:
                 entry.size = 8;
                 break;
+            case UnsignedInt:
             case Int:
                 entry.size = 4;
                 break;
+            case UnsignedShort:
             case Short:
                 entry.size = 2;
                 break;
+            case UnsignedChar:
             case Char:
                 entry.size = 1;
                 break;
@@ -36,15 +40,15 @@ symbol_table::Entry symbol_table::Entry::create(const std::string &identifier, c
     return entry;
 }
 
-symbol_table::Entry * symbol_table::addStruct(const std::string &identifier) {
+SymbolTable::Entry * SymbolTable::addStruct(const std::string &identifier) {
     if (structs.contains(identifier)) {
         throw std::runtime_error("Redefinition of struct with identifier \"" + identifier + "\"");
     }
-    structs[identifier] = Entry{ .identifier = identifier, .stype = Struct, .size = 0 };
+    structs[identifier] = Entry{ .identifier = identifier, .stype = Struct, .incomplete = true, .size = 0 };
     return &structs[identifier];
 }
 
-symbol_table::Entry * symbol_table::addSymbol(const std::string &identifier, const PrimitiveType stype,
+SymbolTable::Entry * SymbolTable::addSymbol(const std::string &identifier, const PrimitiveType stype,
     const short indirection, Entry *ctype) {
     if (symbols.contains(identifier)) {
         throw std::runtime_error("Redefinition of symbol \"" + identifier + "\"");
@@ -53,7 +57,7 @@ symbol_table::Entry * symbol_table::addSymbol(const std::string &identifier, con
     return &symbols[identifier];
 }
 
-symbol_table::Entry * symbol_table::addMember(const std::string &structIdentifier, const std::string &memberIdentifier,
+SymbolTable::Entry * SymbolTable::addMember(const std::string &structIdentifier, const std::string &memberIdentifier,
     const PrimitiveType stype, const short indirection, Entry *ctype) {
     if (!structs.contains(structIdentifier)) {
         throw std::runtime_error("Cannot add member to struct which does not exist \"" + structIdentifier + "\"");
@@ -70,20 +74,40 @@ symbol_table::Entry * symbol_table::addMember(const std::string &structIdentifie
     return &structEntry.members[memberIdentifier];
 }
 
-symbol_table::Entry * symbol_table::findStruct(const std::string &identifier) {
+SymbolTable::Entry * SymbolTable::tryFindStruct(const std::string &identifier) {
+
     if (!structs.contains(identifier)) {
         if (parent_scope != nullptr) {
             return parent_scope->findStruct(identifier);
         }
-        throw std::runtime_error("Cannot find struct with identifier \"" + identifier + "\"");
+        return nullptr;
     }
 
     return &structs[identifier];
 }
 
-symbol_table::Entry * symbol_table::findSymbol(const std::string &identifier) {
-    if (symbols.contains(identifier)) {
-        throw std::runtime_error("Redefinition of symbol \"" + identifier + "\"");
+SymbolTable::Entry * SymbolTable::tryFindSymbol(const std::string &identifier) {
+    if (!symbols.contains(identifier)) {
+        if (parent_scope != nullptr) {
+            return parent_scope->findSymbol(identifier);
+        }
+        return nullptr;
     }
     return &symbols[identifier];
+}
+
+SymbolTable::Entry * SymbolTable::findStruct(const std::string &identifier) {
+    Entry * entry = tryFindStruct(identifier);
+    if (!entry) {
+        throw std::runtime_error("Cannot find struct with identifier \"" + identifier + "\"");
+    }
+    return entry;
+}
+
+SymbolTable::Entry * SymbolTable::findSymbol(const std::string &identifier) {
+    Entry * entry = tryFindSymbol(identifier);
+    if (!entry) {
+        throw std::runtime_error("Cannot find symbol with identifier \"" + identifier + "\"");
+    }
+    return entry;
 }
