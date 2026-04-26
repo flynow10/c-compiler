@@ -43,6 +43,7 @@ namespace AST {
             NK_ParameterizedDeclarator,
             NK_ParameterList,
             NK_Parameter,
+            NK_InitDeclaratorList,
             NK_InitDeclarator,
             NK_InitializerList,
             NK_TypeName,
@@ -81,6 +82,8 @@ namespace AST {
 
         explicit Node(const NodeKind K) : Kind(K) {}
         virtual ~Node() = default;
+        // Node(const Node &node) = delete;
+
 
         virtual unique_ptr<Node> *begin() {
             return nullptr;
@@ -182,22 +185,17 @@ namespace AST {
     };
 
     class Decl : public Node {
-        unique_ptr<Node> *nodes = nullptr;
-        size_t num_spec_quals = 0;
-        size_t num_declarators = 0;
-
+        enum {DECL_SPECS, DECLARATOR_LIST};
+        unique_ptr<Node> nodes[2];
     public:
         Decl() : Node(NK_Decl) {}
-        ~Decl() override {
-            delete[] nodes;
+
+        [[nodiscard]] Node *get_decl_specs() const {
+            return nodes[DECL_SPECS].get();
         }
 
-        [[nodiscard]] size_t get_num_spec_quals() const {
-            return num_spec_quals;
-        }
-
-        [[nodiscard]] size_t get_num_declarators() const {
-            return num_declarators;
+        [[nodiscard]] Node *get_declarators() const {
+            return nodes[DECLARATOR_LIST].get();
         }
 
         [[nodiscard]] unique_ptr<Node> *begin() override {
@@ -209,37 +207,18 @@ namespace AST {
         }
 
         [[nodiscard]] unique_ptr<Node> *end() override {
-            return nodes + num_spec_quals + num_declarators;
+            return nodes + 2;
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return nodes + num_spec_quals + num_declarators;
+            return nodes + 2;
         }
 
-        Node *operator[](const std::size_t index) const {
-            return nodes[index].get();
-        }
-
-        [[nodiscard]] Node *get_spec_qual(const std::size_t index) const {
-            return this->operator[](index);
-        }
-
-        [[nodiscard]] Node *get_declarator(const std::size_t index) const {
-            return this->operator[](index + num_spec_quals);
-        }
-
-        static unique_ptr<Decl> create(std::vector<unique_ptr<Node> > &spec_quals,
-                                       std::vector<unique_ptr<Node> > &declarators) {
+        static unique_ptr<Decl> create(unique_ptr<Node> spec_quals,
+                                       unique_ptr<Node> declarators) {
             auto base = std::make_unique<Decl>();
-            base->nodes = new unique_ptr<Node>[spec_quals.size() + declarators.size()];
-            base->num_spec_quals = spec_quals.size();
-            base->num_declarators = declarators.size();
-            for (int i = 0; i < spec_quals.size(); ++i) {
-                base->nodes[i] = std::move(spec_quals[i]);
-            }
-            for (int i = 0; i < declarators.size(); ++i) {
-                base->nodes[i + base->num_spec_quals] = std::move(declarators[i]);
-            }
+            base->nodes[DECL_SPECS] = std::move(spec_quals);
+            base->nodes[DECLARATOR_LIST] = std::move(declarators);
             return base;
         }
 
@@ -255,7 +234,7 @@ namespace AST {
 
     class DeclSpecifiers : public Node {
         std::unique_ptr<Node> *nodes = nullptr;
-        size_t num_spec_quals = 0;
+        size_t size = 0;
     public:
         DeclSpecifiers() : Node(NK_DeclSpecifiers) {}
         ~DeclSpecifiers() override {
@@ -271,17 +250,25 @@ namespace AST {
         }
 
         [[nodiscard]] unique_ptr<Node> *end() override {
-            return nodes + num_spec_quals;
+            return nodes + size;
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return nodes + num_spec_quals;
+            return nodes + size;
+        }
+
+        Node *operator[](const std::size_t index) const {
+            return nodes[index].get();
+        }
+
+        [[nodiscard]] size_t get_size() const {
+            return size;
         }
 
         static unique_ptr<DeclSpecifiers> create(std::vector<unique_ptr<Node> > &nodes) {
             auto base = std::make_unique<DeclSpecifiers>();
             base->nodes = new unique_ptr<Node>[nodes.size()];
-            base->num_spec_quals = nodes.size();
+            base->size = nodes.size();
             for (int i = 0; i < nodes.size(); ++i) {
                 base->nodes[i] = std::move(nodes[i]);
             }
@@ -559,16 +546,28 @@ namespace AST {
 
     public:
         Declarator() : Node(NK_Declarator) {}
-        [[nodiscard]] const unique_ptr<Node> &get_direct_declarator() const {
-            return nodes[DIRECT_DECLARATOR];
+        [[nodiscard]] Node *get_direct_declarator() const {
+            return nodes[DIRECT_DECLARATOR].get();
         }
 
-        [[nodiscard]] const unique_ptr<Node> &get_pointer() const {
-            return nodes[POINTER];
+        [[nodiscard]] Node *get_pointer() const {
+            return nodes[POINTER].get();
         }
 
-        [[nodiscard]] const unique_ptr<Node> &get_suffix() const {
-            return nodes[SUFFIX];
+        [[nodiscard]] Node *get_suffix() const {
+            return nodes[SUFFIX].get();
+        }
+
+        [[nodiscard]] bool is_abstract() const {
+            return isAbstract;
+        }
+
+        [[nodiscard]] bool has_pointer() const {
+            return hasPointer;
+        }
+
+        [[nodiscard]] bool has_suffix() const {
+            return hasSuffix;
         }
 
         unique_ptr<Node> *begin() override {
@@ -623,7 +622,7 @@ namespace AST {
 
     class Pointer : public Node {
         unique_ptr<Pointer> next_pointer = nullptr;
-        bool is_const = false;
+        bool isConst = false;
 
     public:
         Pointer() : Node(NK_Pointer) {}
@@ -631,8 +630,19 @@ namespace AST {
             this->next_pointer = std::move(nextPointer);
         }
 
-        [[nodiscard]] const unique_ptr<Pointer> &get_next_pointer() const {
-            return next_pointer;
+        [[nodiscard]] Pointer *get_next_pointer() const {
+            if (next_pointer == nullptr) {
+                return nullptr;
+            }
+            return next_pointer.get();
+        }
+
+        [[nodiscard]] bool has_next_pointer() const {
+            return next_pointer != nullptr;
+        }
+
+        [[nodiscard]] bool is_const() const {
+            return isConst;
         }
 
         unique_ptr<Node> *begin() override {
@@ -665,7 +675,7 @@ namespace AST {
 
         static unique_ptr<Pointer> create(const bool isConst) {
             auto base = std::make_unique<Pointer>();
-            base->is_const = isConst;
+            base->isConst = isConst;
             return base;
         }
 
@@ -683,6 +693,11 @@ namespace AST {
 
     public:
         DirectDeclarator() : Node(NK_DirectDeclarator) {}
+
+        [[nodiscard]] const std::string &get_identifier() const {
+            return identifier;
+        }
+
         static unique_ptr<DirectDeclarator> create(std::string identifier) {
             auto base = std::make_unique<DirectDeclarator>();
             base->identifier = std::move(identifier);
@@ -869,6 +884,58 @@ namespace AST {
         }
     };
 
+    class InitDeclaratorList: public Node {
+        unique_ptr<Node> *nodes = nullptr;
+        size_t size = 0;
+    public:
+        InitDeclaratorList() : Node(NK_InitDeclaratorList) {}
+        ~InitDeclaratorList() override {
+            delete[] nodes;
+        }
+
+        unique_ptr<Node> * begin() override {
+            return nodes;
+        }
+
+        [[nodiscard]] const unique_ptr<Node> * begin() const override {
+            return nodes;
+        }
+
+        unique_ptr<Node> * end() override {
+            return nodes + size;
+        }
+
+        [[nodiscard]] const unique_ptr<Node> * end() const override {
+            return nodes + size;
+        }
+
+        [[nodiscard]] size_t get_size() const {
+            return size;
+        }
+
+        Node *operator[](const size_t index) const {
+            return nodes[index].get();
+        }
+
+        static bool classof(const Node *node) {
+            return node->getKind() == NK_InitDeclaratorList;
+        }
+
+        static unique_ptr<InitDeclaratorList> create(std::vector<unique_ptr<Node>> &initDeclarators) {
+            auto base = std::make_unique<InitDeclaratorList>();
+            base->nodes = new unique_ptr<Node>[initDeclarators.size()];
+            base->size = initDeclarators.size();
+            for (size_t i = 0; i < initDeclarators.size(); i++) {
+                base->nodes[i] = std::move(initDeclarators[i]);
+            }
+            return base;
+        }
+    protected:
+        [[nodiscard]] std::string _get_name() const override {
+            return "InitDeclaratorList";
+        }
+    };
+
     class InitDeclarator : public Node {
         enum { DECLARATOR, INITIALIZER };
 
@@ -877,8 +944,16 @@ namespace AST {
 
     public:
         InitDeclarator() : Node(NK_InitDeclarator) {}
-        [[nodiscard]] const Declarator &get_declarator() const {
-            return cast<Declarator>(nodes[DECLARATOR]);
+        [[nodiscard]] Node *get_declarator() const {
+            return nodes[DECLARATOR].get();
+        }
+
+        [[nodiscard]] bool has_initializer() const {
+            return hasInitializer;
+        }
+
+        [[nodiscard]] Node *get_initializer() const {
+            return nodes[INITIALIZER].get();
         }
 
         [[nodiscard]] unique_ptr<Node> *begin() override {

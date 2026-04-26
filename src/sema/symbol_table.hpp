@@ -24,14 +24,14 @@ public:
         Struct,
     };
     struct Entry {
-    public:
         std::string identifier;
-        PrimitiveType stype;
+        PrimitiveType stype = Void;
         bool incomplete = false;
         short indirection = 0;
         // Used to reference struct types
         Entry *ctype = nullptr;
         std::map<std::string, Entry> members;
+        bool is_static = false;
         int size = 0;
 
         Entry *findMember(const std::string &member) {

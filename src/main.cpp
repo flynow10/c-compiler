@@ -6,6 +6,7 @@
 
 #include "lexer.hpp"
 #include "parsing/parse.hpp"
+#include "sema/sema.hpp"
 
 struct CompilerOptions {
     std::string inFile;
@@ -59,6 +60,9 @@ int main(const int argc, char *argv[]) {
     Parser parser;
 
     const auto ast = parser.parse(inputFile);
+
+    Sema sema;
+    sema.acceptAST(ast.get());
 
     if (options.outFile.empty()) {
         std::cout << ast << std::endl;

@@ -10,8 +10,8 @@ add_executable(c_compiler src/main.cpp
         src/lexer.cpp
         src/parsing/parse.cpp
         src/parsing/ast.cpp
-        src/sema/Sema.cpp
-        src/sema/Sema.hpp
+        src/sema/sema.cpp
+        src/sema/sema.hpp
         src/gen/mips/mips_target.cpp
         src/gen/mips/mips_target.hpp
         src/gen/ASM_gen.cpp

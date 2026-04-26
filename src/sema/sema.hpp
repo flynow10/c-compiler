@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "symbol_table.hpp"
+#include "symbol_table.hpp"
 #include "../parsing/ast.hpp"
 
 using namespace AST;
@@ -18,8 +19,11 @@ private:
 public:
     void acceptAST(Node *ast);
     void acceptDecl(Decl *decl);
+    SymbolTable::Entry acceptDeclSpecifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl);
     SymbolTable::Entry *acceptStructSpecifier(StructSpecifier *specifier, bool couldBeForwardDecl);
     void acceptStructDecl(const std::string &identifier, StructDeclList *declList);
+    void acceptInitDeclarator(InitDeclarator *initDeclarator, const SymbolTable::Entry &entryPrototype);
+    SymbolTable::Entry acceptDeclarator(Declarator *declarator, SymbolTable::Entry entryPrototype);
     void acceptFunctionDecl(FunctionDecl *functionDecl);
 };
 
