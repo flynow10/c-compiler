@@ -27,6 +27,7 @@ enum PrimitiveType {
     UnsignedShort,
     UnsignedChar,
     Struct,
+    StructRef,
     Array,
     Pointer,
     Function,
@@ -49,6 +50,12 @@ public:
 
     [[nodiscard]] bool is_pointer() const;
 
+    [[nodiscard]] bool is_struct() const;
+
+    [[nodiscard]] bool is_function() const;
+
+    [[nodiscard]] bool is_array() const;
+
     static bool classof(const Type *type) {
         return true;
     }
@@ -67,6 +74,12 @@ struct QualType {
     [[nodiscard]] bool is_signed() const { return type->is_signed(); }
 
     [[nodiscard]] bool is_pointer() const { return type->is_pointer(); }
+
+    [[nodiscard]] bool is_struct() const { return type->is_struct(); }
+
+    [[nodiscard]] bool is_function() const { return type->is_function(); }
+
+    [[nodiscard]] bool is_array() const { return type->is_array(); }
 
     bool operator==(const QualType &other) const {
         if (this->type != nullptr && this->type == other.type && this->is_const == other.is_const) {
@@ -113,9 +126,26 @@ private:
 
 public:
     static StructType *get(Sema &ctx, const MemberMap &members);
+    static StructType *convert(Sema &ctx, Type *structOrRef);
 
     static bool classof(const Type *type) {
         return type->type == Struct;
+    }
+};
+
+struct StructRefType : Type {
+    std::string identifier;
+
+private:
+    StructRefType(std::string identifier) : Type(StructRef), identifier(std::move(identifier)) {}
+
+public:
+    StructType *get_complete_type(Sema& ctx) const;
+
+    static StructRefType *get(Sema& ctx, const std::string &identifier);
+
+    static bool classof(const Type *type) {
+        return type->type == StructRef;
     }
 };
 
@@ -197,6 +227,15 @@ struct std::hash<StructType> {
         for (const auto &[id, type]: structType.members) {
             hash_combine(result, id, type);
         }
+        return result;
+    }
+};
+
+template <>
+struct std::hash<StructRefType> {
+    std::size_t operator()(StructRefType const &type) const noexcept {
+        size_t result = 0;
+        hash_combine(result, type.type, type.identifier);
         return result;
     }
 };

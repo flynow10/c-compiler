@@ -806,10 +806,15 @@ namespace AST {
     class ParameterizedDeclarator : public Node {
         enum {PARAMETER_LIST, NEXT_SUFFIX};
         unique_ptr<Node> nodes[2];
+        bool hasParameters = false;
         bool hasNext = false;
 
     public:
         ParameterizedDeclarator() : Node(NK_ParameterizedDeclarator) {}
+
+        [[nodiscard]] bool has_parameters() const {
+            return hasParameters;
+        }
 
         [[nodiscard]] ParameterList *get_parameter_list() const {
             return cast<ParameterList>(nodes[PARAMETER_LIST].get());
@@ -841,7 +846,8 @@ namespace AST {
 
         static unique_ptr<ParameterizedDeclarator> create(unique_ptr<Node> parameterList, unique_ptr<Node> suffix) {
             auto base = std::make_unique<ParameterizedDeclarator>();
-            base->hasNext = parameterList != nullptr;
+            base->hasNext = suffix != nullptr;
+            base->hasParameters = parameterList != nullptr;
             base->nodes[PARAMETER_LIST] = std::move(parameterList);
             base->nodes[NEXT_SUFFIX] = std::move(suffix);
             return base;
@@ -1758,6 +1764,7 @@ namespace AST {
     class FunctionCall : public Postfix {
         enum {EXPRESSION, ARGUMENT_LIST};
         unique_ptr<Node> nodes[2];
+        bool hasArgumentList = false;
     public:
         FunctionCall() : Postfix(NK_FunctionCall) {}
 
@@ -1765,8 +1772,12 @@ namespace AST {
             return cast<Expression>(nodes[EXPRESSION].get());
         }
 
-        [[nodiscard]] Node *get_argument_list() const {
-            return nodes[ARGUMENT_LIST].get();
+        [[nodiscard]] bool has_argument_list() const {
+            return hasArgumentList;
+        }
+
+        [[nodiscard]] ExpressionList *get_argument_list() const {
+            return cast<ExpressionList>(nodes[ARGUMENT_LIST].get());
         }
 
         unique_ptr<Node> *begin() override {
@@ -1791,6 +1802,7 @@ namespace AST {
 
         static unique_ptr<FunctionCall> create(unique_ptr<Node> expression, unique_ptr<Node> argumentList) {
             auto base = std::make_unique<FunctionCall>();
+            base->hasArgumentList = argumentList != nullptr;
             base->nodes[EXPRESSION] = std::move(expression);
             base->nodes[ARGUMENT_LIST] = std::move(argumentList);
             return base;
@@ -1992,6 +2004,10 @@ namespace AST {
             return cast<CompoundStatement>(nodes[IF_BODY].get());
         }
 
+        [[nodiscard]] bool has_else() const {
+            return hasElse;
+        }
+
         [[nodiscard]] CompoundStatement *get_else() const {
             if (!hasElse) return nullptr;
             return cast<CompoundStatement>(nodes[ELSE_BODY].get());
@@ -2045,11 +2061,11 @@ namespace AST {
 
     public:
         WhileStatement() : Statement(NK_WhileStatement) {}
-        [[nodiscard]] const Expression *get_condition() const {
+        [[nodiscard]] Expression *get_condition() const {
             return cast<Expression>(nodes[CONDITION].get());
         }
 
-        [[nodiscard]] const CompoundStatement *get_body() const {
+        [[nodiscard]] CompoundStatement *get_body() const {
             return cast<CompoundStatement>(nodes[BODY].get());
         }
 
@@ -2092,11 +2108,11 @@ namespace AST {
 
     public:
         DoStatement() : Statement(NK_DoStatement) {}
-        [[nodiscard]] const Expression *get_condition() const {
+        [[nodiscard]] Expression *get_condition() const {
             return cast<Expression>(nodes[CONDITION].get());
         }
 
-        [[nodiscard]] const CompoundStatement *get_body() const {
+        [[nodiscard]] CompoundStatement *get_body() const {
             return cast<CompoundStatement>(nodes[BODY].get());
         }
 
@@ -2143,22 +2159,22 @@ namespace AST {
 
     public:
         ForStatement() : Statement(NK_ForStatement) {}
-        [[nodiscard]] const Expression *get_initialization() const {
+        [[nodiscard]] Node *get_initialization() const {
             if (!hasInit) return nullptr;
-            return cast<Expression>(nodes[INITIALIZATION].get());
+            return nodes[INITIALIZATION].get();
         }
 
-        [[nodiscard]] const Expression *get_condition() const {
+        [[nodiscard]] Expression *get_condition() const {
             if (!hasCondition) return nullptr;
             return cast<Expression>(nodes[CONDITION].get());
         }
 
-        [[nodiscard]] const Expression *get_increment() const {
+        [[nodiscard]] Expression *get_increment() const {
             if (!hasIncrement) return nullptr;
             return cast<Expression>(nodes[INCREMENT].get());
         }
 
-        [[nodiscard]] const CompoundStatement *get_body() const {
+        [[nodiscard]] CompoundStatement *get_body() const {
             return cast<CompoundStatement>(nodes[BODY].get());
         }
 
@@ -2208,7 +2224,9 @@ namespace AST {
         [[nodiscard]] bool is_continue() const { return state == CONTINUE; }
         [[nodiscard]] bool is_return() const { return state == RETURN; }
 
-        [[nodiscard]] const Expression *get_return_expression() const {
+        [[nodiscard]] bool has_return_expr() const {return returnExpression != nullptr; }
+
+        [[nodiscard]] Expression *get_return_expression() const {
             if (!is_return()) return nullptr;
             return cast<Expression>(returnExpression.get());
         }

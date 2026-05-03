@@ -18,6 +18,8 @@ struct Board {
     struct Move *move_list;
 };
 
+void *malloc(unsigned int size);
+
 struct Coordinate indexToCoord(const int index) {
     const struct Coordinate coord = {index % 8, index / 8};
     return coord;

@@ -26,14 +26,22 @@ public:
         static Entry create(const std::string &identifier, QualType type);
     };
 
+    enum TableType {
+        File,
+        Function,
+        Loop,
+        Block
+    };
+
     SymbolTable(SymbolTable &) = delete;
     SymbolTable & operator=(const SymbolTable &) = delete;
 
     std::map<std::string, Entry> structs;
     std::map<std::string, Entry> symbols;
     SymbolTable *parent_scope = nullptr;
+    TableType table_type = File;
 
-    explicit SymbolTable(SymbolTable * parent) : parent_scope(parent) {
+    explicit SymbolTable(SymbolTable * parent, TableType type) : parent_scope(parent), table_type(type) {
     }
 
     Entry *addStruct(const std::string &identifier);
@@ -52,6 +60,9 @@ public:
     [[nodiscard]] bool isLocallyDefinedSymbol(const std::string &identifier) const;
 
     [[nodiscard]] bool isLocallyDefinedStruct(const std::string &identifier) const;
+
+    [[nodiscard]] bool isInLoop() const;
+    [[nodiscard]] bool isInFunction() const;
 };
 
 // ----------------------------
@@ -65,6 +76,7 @@ public:
     std::map<HashValue, IntegerType> integer_types;
     std::map<HashValue, PointerType> pointer_types;
     std::map<HashValue, StructType> struct_types;
+    std::map<HashValue, StructRefType> struct_ref_types;
     std::map<HashValue, ArrayType> array_types;
     std::map<HashValue, FunctionType> function_types;
     SymbolTable *global_table = nullptr;
@@ -80,17 +92,19 @@ private:
 
     QualType accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl);
 
-    StructType *accept_struct_specifier(StructSpecifier *specifier, bool couldBeForwardDecl);
+    Type *accept_struct_specifier(StructSpecifier *specifier, bool couldBeForwardDecl);
 
     StructType *accept_struct_decl(StructDeclList *declList);
 
     SymbolTable::Entry accept_init_declarator(InitDeclarator *initDeclarator, QualType type);
+    void accept_initializer_list(InitializerList *initializerList, Type *structOrRef);
     SymbolTable::Entry accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract);
     QualType accept_index_declarator(IndexDeclarator *indexDeclarator, QualType type, bool inFunctionDef);
     QualType accept_parameterized_declarator(ParameterizedDeclarator *parameterizedDeclarator, QualType returnType);
 
     void accept_function_decl(FunctionDecl *functionDecl);
-    void accept_compound_statement(CompoundStatement *compound_statement);
+    void accept_compound_statement(CompoundStatement *compoundStatement);
+    void accept_compound_statement(CompoundStatement *compoundStatement, const std::shared_ptr<SymbolTable> &symbolTable);
     void accept_statement(Statement *statement);
     void accept_selection_statement(SelectionStatement *selectionStatement);
     void accept_while_statement(WhileStatement *whileStatement);
@@ -130,6 +144,9 @@ public:
     static Type *integer_promotion(Sema& ctx, Type *type);
     static Type *usual_arithmetic_conversions(Sema& ctx, Type *lType, Type *rType);
     static QualType dereference_pointer(Type *type, const Expression *parentExpression);
+    static bool is_pointer_to_function(const Type *type);
+
+    QualType convert_array_to_pointer(QualType type, const Expression *parentExpression);
 };
 
 

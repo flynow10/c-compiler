@@ -133,10 +133,10 @@ QualType Sema::accept_index_expression(IndexExpression *indexExpression) {
     auto *index = indexExpression->get_index();
     auto lType = accept_expression(lhs);
     auto indexType = accept_expression(index);
-    if (!(lType.is_pointer() && indexType.is_integer()) && !(lType.is_integer() && indexType.is_pointer())) {
+    if (!((lType.is_pointer() || lType.is_array()) && indexType.is_integer()) && !(lType.is_integer() && (indexType.is_pointer() || indexType.is_array()))) {
         throw SemaAnalysis::ExprException(indexExpression, "Cannot index expressions of non-pointer type");
     }
-    auto &pointerType = lType.is_pointer() ? lType : indexType;
+    auto pointerType = convert_array_to_pointer(lType.is_integer() ? indexType : lType, indexExpression);
     auto &integerType = lType.is_integer() ? lType : indexType;
     return dereference_pointer(pointerType.type, indexExpression);
 }
@@ -144,7 +144,36 @@ QualType Sema::accept_index_expression(IndexExpression *indexExpression) {
 QualType Sema::accept_function_call(FunctionCall *functionCall) {
     auto *lhs = functionCall->get_lhs();
     auto lType = accept_expression(lhs);
-    throw SemaAnalysis::ExprException(functionCall, "Function calls have not been implemented yet");
+    if (!lType.is_function() && !is_pointer_to_function(lType.type)) {
+        throw SemaAnalysis::ExprException(functionCall, "Cannot call non function expression");
+    }
+    FunctionType *functionType;
+    if (lType.is_pointer()) {
+        functionType = cast<FunctionType>(dereference_pointer(lType.type, functionCall).type);
+    } else {
+        functionType = cast<FunctionType>(lType.type);
+    }
+
+    if (functionCall->has_argument_list()) {
+        auto *argList = functionCall->get_argument_list();
+        if (functionType->argument_types.size() != argList->get_size()) {
+            throw std::runtime_error("Invalid number of arguments to function call");
+        }
+        for (int i = 0; i < argList->get_size(); ++i) {
+            Expression *argument = (*argList)[i];
+            QualType exprType = accept_expression(argument);
+            FunctionArg argType = functionType->argument_types[i];
+            if (!are_implicitly_convertable(argType.type.type, exprType.type)) {
+                throw std::runtime_error("Cannot convert argument #" + std::to_string(i) + " in function call");
+            }
+        }
+    } else {
+        if (!functionType->argument_types.empty()) {
+            throw std::runtime_error("Invalid number of arguments to function call");
+        }
+    }
+
+    return functionType->return_type;
 }
 
 QualType Sema::accept_post_assignment(PostAssignment *postAssignment) {
@@ -182,6 +211,9 @@ QualType Sema::accept_identifier(Identifier *identifier) {
 
 QualType Sema::accept_constant(Constant *constant) {
     auto &constantValue = constant->get_value();
+    if (constantValue.at(0) == '\'') {
+        return {IntegerType::get(*this, Char), true};
+    }
     return {IntegerType::get(*this, Int), true};
 }
 
@@ -302,6 +334,15 @@ bool Sema::are_implicitly_convertable(const Type *left, const Type *right) {
         return true;
     }
 
+    if (is_pointer_to_function(left) && right->is_function()) {
+        return cast<PointerType>(left)->pointed_type.type == right;
+    }
+
+    // TODO: Investigate dubious convertibility criteria
+    if (left->is_pointer() && right->is_integer()) {
+        return true;
+    }
+
     return false;
 }
 
@@ -390,4 +431,21 @@ QualType Sema::dereference_pointer(Type *type, const Expression *parentExpressio
         throw SemaAnalysis::ExprException(parentExpression, "Cannot dereference type which is not a PointerType");
     }
     return cast<PointerType>(type)->pointed_type;
+}
+
+bool Sema::is_pointer_to_function(const Type *type) {
+    if (!isa<PointerType>(type)) {
+        return false;
+    }
+    return cast<PointerType>(type)->pointed_type.is_function();
+}
+
+QualType Sema::convert_array_to_pointer(QualType type, const Expression *parentExpression) {
+    if (isa<PointerType>(type.type)) {
+        return type;
+    }
+    if (auto *arrayType = dyn_cast<ArrayType>(type.type)) {
+        return {PointerType::get(*this, arrayType->element_type), type.is_const};
+    }
+    throw SemaAnalysis::ExprException(parentExpression, "Convert array to pointer failed on non array type");
 }

@@ -73,3 +73,23 @@ bool SymbolTable::isLocallyDefinedSymbol(const std::string &identifier) const {
 bool SymbolTable::isLocallyDefinedStruct(const std::string &identifier) const {
     return structs.contains(identifier);
 }
+
+bool SymbolTable::isInLoop() const {
+    if (table_type == Loop) {
+        return true;
+    }
+    if (parent_scope != nullptr) {
+        return parent_scope->isInLoop();
+    }
+    return false;
+}
+
+bool SymbolTable::isInFunction() const {
+    if (table_type == Function) {
+        return true;
+    }
+    if (parent_scope != nullptr) {
+        return parent_scope->isInFunction();
+    }
+    return false;
+}

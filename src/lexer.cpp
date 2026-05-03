@@ -197,7 +197,7 @@ void Lexer::tokenize(std::istream &code) {
         }
 
         if (currentChar == '\'') {
-            tokens.push_back(createToken(TokenType::Constant, parseEscapedString(code, '\'')));
+            tokens.push_back(createToken(TokenType::Constant, "'" + (parseEscapedString(code, '\'') + "'")));
             continue;
         }
 
