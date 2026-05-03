@@ -123,7 +123,7 @@ public:
     static bool is_valid_bin_op(const Type *lType, const Type *rType, BinOp::Op operation);
     static Type *integer_promotion(Sema& ctx, Type *type);
     static Type *usual_arithmetic_conversions(Sema& ctx, Type *lType, Type *rType);
-    static QualType dereference_pointer(Type *type);
+    static QualType dereference_pointer(Type *type, const Expression *parentExpression);
 };
 
 

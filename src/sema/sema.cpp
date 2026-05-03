@@ -4,27 +4,43 @@
 
 #include "sema.hpp"
 
+#include <sstream>
+
+#include "exceptions.hpp"
 #include "../casting.hpp"
 #include "../parsing/ast.hpp"
 
 using namespace AST;
 
 void Sema::accept_ast(Node *ast) {
-    if (const auto tu = dyn_cast<TranslationUnit>(ast)) {
-        tu->set_symbol_table(std::make_shared<SymbolTable>(nullptr));
-        global_table = tu->get_symbol_table_raw();
-        local_table = global_table;
-        for (const auto &node: *tu) {
-            if (isa<Decl>(node)) {
-                accept_decl(cast<Decl>(node.get()));
-            } else if (isa<FunctionDecl>(node)) {
-                accept_function_decl(cast<FunctionDecl>(node.get()));
-            } else {
-                throw std::runtime_error("Translation units must only contain declarations and function declarations.");
+    try {
+        if (const auto tu = dyn_cast<TranslationUnit>(ast)) {
+            tu->set_symbol_table(std::make_shared<SymbolTable>(nullptr));
+            global_table = tu->get_symbol_table_raw();
+            local_table = global_table;
+            int i = 0;
+            for (const auto &node: *tu) {
+                try {
+                    if (isa<Decl>(node)) {
+                        accept_decl(cast<Decl>(node.get()));
+                    } else if (isa<FunctionDecl>(node)) {
+                        accept_function_decl(cast<FunctionDecl>(node.get()));
+                    } else {
+                        throw std::runtime_error("Translation units must only contain declarations and function declarations.");
+                    }
+                } catch (...) {
+                    std::stringstream s;
+                    s << "Declaration #" << i << " of translation unit:";
+                    std::throw_with_nested(std::runtime_error(s.str()));
+                }
+                i++;
             }
+        } else {
+            throw std::runtime_error("AST must begin with a translation unit.");
         }
-    } else {
-        throw std::runtime_error("AST must begin with a translation unit.");
+    } catch (const std::exception &e) {
+        SemaAnalysis::print_exception(e);
+        throw std::runtime_error("exception occurred in semantic analysis");
     }
 }
 
@@ -245,38 +261,42 @@ void Sema::accept_compound_statement(CompoundStatement *compound_statement) {
     compound_statement->set_symbol_table(std::make_shared<SymbolTable>(local_table));
     local_table = compound_statement->get_symbol_table_raw();
 
+    int i = 0;
     for (auto &node: *compound_statement) {
         assert(isa<Statement>(node.get()));
         const auto statement = cast<Statement>(node.get());
-        accept_statement(statement);
+        try {
+            accept_statement(statement);
+        } catch (...) {
+            std::stringstream s;
+            s << "Statement #" << i << " of compound statement:";
+            std::throw_with_nested(std::runtime_error(s.str()));
+        }
+        i++;
     }
 
     local_table = local_table->parent_scope;
 }
 
 void Sema::accept_statement(Statement *statement) {
-    try {
-        if (auto *compoundStmt = dyn_cast<CompoundStatement>(statement)) {
-            accept_compound_statement(compoundStmt);
-        } else if (auto *exprStmt = dyn_cast<ExpressionStatement>(statement)) {
-            accept_expression(exprStmt->get_expression());
-        } else if (auto *declStmt = dyn_cast<Decl>(statement)) {
-            accept_decl(declStmt);
-        } else if (auto *selectionStmt = dyn_cast<SelectionStatement>(statement)) {
-            accept_selection_statement(selectionStmt);
-        } else if (auto *whileStmt = dyn_cast<WhileStatement>(statement)) {
-            accept_while_statement(whileStmt);
-        } else if (auto *doStmt = dyn_cast<DoStatement>(statement)) {
-            accept_do_statement(doStmt);
-        } else if (auto *forStmt = dyn_cast<ForStatement>(statement)) {
-            accept_for_statement(forStmt);
-        } else if (auto *controlStmt = dyn_cast<ControlStatement>(statement)) {
-            accept_control_statement(controlStmt);
-        } else {
-            throw std::runtime_error("Unexpected statement type");
-        }
-    } catch (std::runtime_error &e) {
-        throw;
+    if (auto *compoundStmt = dyn_cast<CompoundStatement>(statement)) {
+        accept_compound_statement(compoundStmt);
+    } else if (auto *exprStmt = dyn_cast<ExpressionStatement>(statement)) {
+        accept_expression(exprStmt->get_expression());
+    } else if (auto *declStmt = dyn_cast<Decl>(statement)) {
+        accept_decl(declStmt);
+    } else if (auto *selectionStmt = dyn_cast<SelectionStatement>(statement)) {
+        accept_selection_statement(selectionStmt);
+    } else if (auto *whileStmt = dyn_cast<WhileStatement>(statement)) {
+        accept_while_statement(whileStmt);
+    } else if (auto *doStmt = dyn_cast<DoStatement>(statement)) {
+        accept_do_statement(doStmt);
+    } else if (auto *forStmt = dyn_cast<ForStatement>(statement)) {
+        accept_for_statement(forStmt);
+    } else if (auto *controlStmt = dyn_cast<ControlStatement>(statement)) {
+        accept_control_statement(controlStmt);
+    } else {
+        throw std::runtime_error("Unexpected statement type");
     }
 }
 

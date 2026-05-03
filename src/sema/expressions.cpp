@@ -1,6 +1,7 @@
 //
 // Created by Natalie Wagner on 4/25/26.
 //
+#include "exceptions.hpp"
 #include "sema.hpp"
 #include "types.hpp"
 
@@ -33,7 +34,7 @@ QualType Sema::accept_expression(Expression *expression) {
     } else if (auto *stringLiteral = dyn_cast<StringLiteral>(expression)) {
         type = accept_string_literal(stringLiteral);
     } else {
-        throw std::runtime_error("Unknown expression type");
+        throw SemaAnalysis::ExprException(expression, "Unknown expression type");
     }
     if (!expression->has_type_info()) {
         expression->set_type(type);
@@ -53,15 +54,15 @@ QualType Sema::accept_assignment(Assignment *assignment) {
     auto *lhs = assignment->get_lhs();
     auto *rhs = assignment->get_rhs();
     if (!is_lvalue(lhs)) {
-        throw std::runtime_error("Assignment not allowed to non lvalue expression");
+        throw SemaAnalysis::ExprException(assignment, "Assignment not allowed to non lvalue expression");
     }
     auto lType = accept_expression(lhs);
     if (lType.is_const) {
-        throw std::runtime_error("Cannot assign to constant expression");
+        throw SemaAnalysis::ExprException(assignment, "Cannot assign to constant expression");
     }
     auto rType = accept_expression(rhs);
     if (!are_implicitly_convertable(lType.type, rType.type)) {
-        throw std::runtime_error("Assignment of incompatible types is forbidden");
+        throw SemaAnalysis::ExprException(assignment, "Assignment of incompatible types is forbidden");
     }
     return lType;
 }
@@ -72,7 +73,7 @@ QualType Sema::accept_bin_op(BinOp *binOp) {
     auto lType = accept_expression(lhs);
     auto rType = accept_expression(rhs);
     if (!is_valid_bin_op(lType.type, rType.type, binOp->get_operation())) {
-        throw std::runtime_error("Cannot perform binary operation between incompatible types");
+        throw SemaAnalysis::ExprException(binOp, "Cannot perform binary operation between incompatible types");
     }
 
     if (lType.is_integer() && rType.is_integer()) {
@@ -98,13 +99,13 @@ QualType Sema::accept_unary_op(UnaryOp *unaryOp) {
 
     if (operation == UnaryOp::ADDRESS_OF) {
         if (!is_lvalue(rhs)) {
-            throw std::runtime_error("Address of operation is not allowed on non lvalue types");
+            throw SemaAnalysis::ExprException(unaryOp, "Address of operation is not allowed on non lvalue types");
         }
         return {PointerType::get(*this, rType), true};
     }
 
     if (operation == UnaryOp::DEREFERENCE) {
-        return dereference_pointer(rType.type);
+        return dereference_pointer(rType.type, unaryOp);
     }
 
     if (operation == UnaryOp::SIZEOF) {
@@ -113,10 +114,10 @@ QualType Sema::accept_unary_op(UnaryOp *unaryOp) {
 
     if (operation == UnaryOp::INCREMENT || operation == UnaryOp::DECREMENT) {
         if (!is_lvalue(rhs)) {
-            throw std::runtime_error("Cannot increment or decrement non lvalue types");
+            throw SemaAnalysis::ExprException(unaryOp, "Cannot increment or decrement non lvalue types");
         }
         if (rType.is_const) {
-            throw std::runtime_error("Cannot increment or decrement to constant expression");
+            throw SemaAnalysis::ExprException(unaryOp, "Cannot increment or decrement to constant expression");
         }
     }
 
@@ -124,6 +125,7 @@ QualType Sema::accept_unary_op(UnaryOp *unaryOp) {
 }
 
 QualType Sema::accept_sizeof(SizeofType *type) {
+    return {IntegerType::get(*this, UnsignedInt), true};
 }
 
 QualType Sema::accept_index_expression(IndexExpression *indexExpression) {
@@ -132,23 +134,23 @@ QualType Sema::accept_index_expression(IndexExpression *indexExpression) {
     auto lType = accept_expression(lhs);
     auto indexType = accept_expression(index);
     if (!(lType.is_pointer() && indexType.is_integer()) && !(lType.is_integer() && indexType.is_pointer())) {
-        throw std::runtime_error("Cannot index expressions of non-pointer type");
+        throw SemaAnalysis::ExprException(indexExpression, "Cannot index expressions of non-pointer type");
     }
     auto &pointerType = lType.is_pointer() ? lType : indexType;
     auto &integerType = lType.is_integer() ? lType : indexType;
-    return dereference_pointer(pointerType.type);
+    return dereference_pointer(pointerType.type, indexExpression);
 }
 
 QualType Sema::accept_function_call(FunctionCall *functionCall) {
     auto *lhs = functionCall->get_lhs();
     auto lType = accept_expression(lhs);
-    throw std::runtime_error("Function calls have not been implemented yet");
+    throw SemaAnalysis::ExprException(functionCall, "Function calls have not been implemented yet");
 }
 
 QualType Sema::accept_post_assignment(PostAssignment *postAssignment) {
     auto *lhs = postAssignment->get_lhs();
     if (!is_lvalue(lhs)) {
-        throw std::runtime_error("Post assignment not allowed to non lvalue expression");
+        throw SemaAnalysis::ExprException(postAssignment, "Post assignment not allowed to non lvalue expression");
     }
     return accept_expression(lhs);
 }
@@ -157,16 +159,16 @@ QualType Sema::accept_member_access(MemberAccess *memberAccess) {
     QualType rhsType = accept_expression(memberAccess->get_lhs());
 
     if (memberAccess->get_access_type() == MemberAccess::POINTER) {
-        rhsType = dereference_pointer(rhsType.type);
+        rhsType = dereference_pointer(rhsType.type, memberAccess);
     }
 
     const auto &memberId = memberAccess->get_rhs();
     if (!isa<StructType>(rhsType.type)) {
-        throw std::runtime_error("Cannot access member of non-struct type");
+        throw SemaAnalysis::ExprException(memberAccess, "Cannot access member of non-struct type");
     }
     auto *structType = cast<StructType>(rhsType.type);
     if (!structType->members.contains(memberId)) {
-        throw std::runtime_error("Member does not exist on struct");
+        throw SemaAnalysis::ExprException(memberAccess, "Member does not exist on struct");
     }
     auto &[memberType, memberConst] = structType->members.at(memberId);
     return {memberType, rhsType.is_const || memberConst};
@@ -188,7 +190,6 @@ QualType Sema::accept_string_literal(StringLiteral *stringLiteral) {
     auto *charType = IntegerType::get(*this, Char);
     auto *arrayType = ArrayType::get(*this, {charType, true}, stringValue.size());
     return {arrayType, true};
-    // TODO: Implement Arrays
 }
 
 // ----------------------------
@@ -365,9 +366,9 @@ Type *Sema::usual_arithmetic_conversions(Sema &ctx, Type *lType, Type *rType) {
     return signedType;
 }
 
-QualType Sema::dereference_pointer(Type *type) {
+QualType Sema::dereference_pointer(Type *type, const Expression *parentExpression) {
     if (!isa<PointerType>(type)) {
-        throw std::runtime_error("Cannot dereference type which is not a PointerType");
+        throw SemaAnalysis::ExprException(parentExpression, "Cannot dereference type which is not a PointerType");
     }
     return cast<PointerType>(type)->pointed_type;
 }
