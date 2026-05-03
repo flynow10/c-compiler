@@ -4,71 +4,75 @@
 
 #include "sema.hpp"
 
-#include "symbol_table.hpp"
 #include "../casting.hpp"
 #include "../parsing/ast.hpp"
 
 using namespace AST;
 
-void Sema::acceptAST(Node *ast) {
+void Sema::accept_ast(Node *ast) {
     if (const auto tu = dyn_cast<TranslationUnit>(ast)) {
+        tu->set_symbol_table(std::make_shared<SymbolTable>(nullptr));
+        global_table = tu->get_symbol_table_raw();
+        local_table = global_table;
         for (const auto & node: *tu) {
             if (isa<Decl>(node)) {
-                acceptDecl(cast<Decl>(node.get()));
+                accept_decl(cast<Decl>(node.get()));
             } else if (isa<FunctionDecl>(node)) {
-                acceptFunctionDecl(cast<FunctionDecl>(node.get()));
+                accept_function_decl(cast<FunctionDecl>(node.get()));
+            } else {
+                throw std::runtime_error("Translation units must only contain declarations and function declarations.");
             }
-            throw std::runtime_error("Translation units must only contain declarations and function declarations.");
         }
     } else {
         throw std::runtime_error("AST must begin with a translation unit.");
     }
 }
 
-const std::unordered_map<TypeSpecifier::TypeSpecifierType, SymbolTable::PrimitiveType> TypeSpecMap = {
-    {TypeSpecifier::LONG, SymbolTable::Long},
-    {TypeSpecifier::INT, SymbolTable::Int},
-    {TypeSpecifier::SHORT, SymbolTable::Short},
-    {TypeSpecifier::CHAR, SymbolTable::Char},
-    {TypeSpecifier::STRUCT, SymbolTable::Struct},
-    {TypeSpecifier::VOID, SymbolTable::Void},
+const std::unordered_map<TypeSpecifier::TypeSpecifierType, PrimitiveType> TypeSpecMap = {
+    {TypeSpecifier::LONG, Long},
+    {TypeSpecifier::INT, Int},
+    {TypeSpecifier::SHORT, Short},
+    {TypeSpecifier::CHAR, SignedChar},
+    {TypeSpecifier::STRUCT, Struct},
+    {TypeSpecifier::VOID, Void},
 };
 
-void Sema::acceptDecl(Decl *decl) {
+void Sema::accept_decl(Decl *decl) {
     auto *declaratorList = cast<InitDeclaratorList>(decl->get_declarators());
     bool couldBeForwardDecl = declaratorList->get_size() == 0;
     auto declSpecs = cast<DeclSpecifiers>(decl->get_decl_specs());
-    auto entryPrototype = acceptDeclSpecifiers(cast<DeclSpecifiers>(declSpecs), couldBeForwardDecl);
+    auto type = accept_decl_specifiers(cast<DeclSpecifiers>(declSpecs), couldBeForwardDecl);
 
     for (int i = 0; i < declaratorList->get_size(); ++i) {
         auto *initDeclarator = (*declaratorList)[i];
         assert(isa<InitDeclarator>(initDeclarator));
-        acceptInitDeclarator(cast<InitDeclarator>(initDeclarator), entryPrototype);
+        SymbolTable::Entry entry = accept_init_declarator(cast<InitDeclarator>(initDeclarator), type);
+        local_table->addSymbol(entry);
     }
 }
 
-SymbolTable::PrimitiveType convertFromTypeSpec(TypeSpecifier::TypeSpecifierType type, bool isSigned) {
+PrimitiveType convertFromTypeSpec(TypeSpecifier::TypeSpecifierType type, bool isSigned) {
     switch (type) {
         case TypeSpecifier::VOID:
-            return SymbolTable::Void;
+            return Void;
         case TypeSpecifier::CHAR:
             if (isSigned)
-                return SymbolTable::Char;
-            return SymbolTable::UnsignedChar;
+                return SignedChar;
+            return UnsignedChar;
         case TypeSpecifier::SHORT:
             if (isSigned)
-                return SymbolTable::Short;
-            return SymbolTable::UnsignedShort;
+                return Short;
+            return UnsignedShort;
         case TypeSpecifier::INT:
             if (isSigned)
-                return SymbolTable::Int;
-            return SymbolTable::UnsignedInt;
+                return Int;
+            return UnsignedInt;
         case TypeSpecifier::LONG:
             if (isSigned)
-                return SymbolTable::Long;
-            return SymbolTable::UnsignedLong;
+                return Long;
+            return UnsignedLong;
         case TypeSpecifier::STRUCT:
-            return SymbolTable::Struct;
+            return Struct;
         default:
             throw std::runtime_error("Unexpected type specifier type");
     }
@@ -78,124 +82,183 @@ void throwDeclareMultipleTypes() noexcept(false) {
     throw std::runtime_error("Cannot currently specify multiple types in one declaration");
 }
 
-SymbolTable::Entry Sema::acceptDeclSpecifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl = false) {
-    std::optional<SymbolTable::PrimitiveType> stype;
-    SymbolTable::Entry * ctype = nullptr;
-    bool typeMarked = false;
+QualType Sema::accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl = false) {
+    Type *type = nullptr;
+    std::optional<TypeSpecifier::TypeSpecifierType> sType;
     bool signMarked = false;
     bool isSigned = true;
-    bool isStatic = false;
+    bool isConst = false;
+
     for (int i = 0; i < specifiers->get_size(); ++i) {
         auto *node = specifiers->operator[](i);
         if (auto *structSpec = dyn_cast<StructSpecifier>(node)) {
-            if (typeMarked) {
+            if (sType.has_value()) {
                 throwDeclareMultipleTypes();
             }
-            ctype = acceptStructSpecifier(structSpec, couldBeForwardDecl);
-            stype = SymbolTable::Struct;
-            typeMarked = true;
+            type = accept_struct_specifier(structSpec, couldBeForwardDecl);
+            sType = TypeSpecifier::STRUCT;
             continue;
         }
         if (const auto *typeSpec = dyn_cast<TypeSpecifier>(node)) {
-            const auto type = typeSpec->get_type();
-            if (type == TypeSpecifier::UNSIGNED || type == TypeSpecifier::SIGNED) {
+            const auto typeSpecType = typeSpec->get_type();
+            if (typeSpecType == TypeSpecifier::UNSIGNED || typeSpecType == TypeSpecifier::SIGNED) {
                 if (signMarked) {
                     throw std::runtime_error("Declarations cannot contain multiple signedness specifiers");
                 }
-                isSigned = type == TypeSpecifier::SIGNED;
+                isSigned = typeSpecType == TypeSpecifier::SIGNED;
                 signMarked = true;
                 continue;
             }
 
-            if (typeMarked) {
+            if (sType.has_value()) {
                 throwDeclareMultipleTypes();
             }
-            stype = convertFromTypeSpec(type, isSigned);
-            typeMarked = true;
+            sType = typeSpecType;
             continue;
         }
         if (isa<TypeQualifier>(node)) {
-            if (isStatic) {
-                throw std::runtime_error("Declarations cannot contain multiple static qualifiers");
+            if (isConst) {
+                throw std::runtime_error("Declarations cannot contain multiple const qualifiers");
             }
-            isStatic = true;
+            isConst = true;
         }
     }
-    if (!stype.has_value()) {
+
+    if (!sType.has_value()) {
         throw std::runtime_error("At least one type specifier must be included in a declaration");
     }
 
-    if (signMarked && (stype == SymbolTable::PrimitiveType::Struct || stype == SymbolTable::PrimitiveType::Void)) {
+    if (signMarked && (sType == Struct || sType == Void)) {
         throw std::runtime_error("Only integer types can be marked as signed or unsigned");
     }
 
-    return {.stype = stype.value(), .ctype = ctype, .is_static = isStatic};
+    if (type != nullptr) {
+        return {type, isConst};
+    }
+    return {Type::get(*this, convertFromTypeSpec(sType.value(), isSigned)), isConst};
 }
 
-SymbolTable::Entry *Sema::acceptStructSpecifier(StructSpecifier *specifier, bool couldBeForwardDecl) {
-    if (!specifier->has_struct_name()) {
-        throw std::runtime_error("Anonymous structs are not currently supported");
-    }
-    const auto &identifier = specifier->get_identifier();
+StructType *Sema::accept_struct_specifier(StructSpecifier *specifier, bool couldBeForwardDecl) {
     if (specifier->has_declaration()) {
-        if (auto *structDecl = dyn_cast<StructDeclList>(specifier->get_declaration())) {
-            acceptStructDecl(specifier->get_identifier(), cast<StructDeclList>(structDecl));
+        auto *structDecl = cast<StructDeclList>(specifier->get_declaration());
+        auto *structType = accept_struct_decl(cast<StructDeclList>(structDecl));
+        if (specifier->has_struct_name()) {
+            const auto &identifier = specifier->get_identifier();
+            SymbolTable::Entry *entry = local_table->tryFindStruct(identifier);
+            if (!entry) {
+                entry = local_table->addStruct(identifier);
+            }
+
+            if (entry->is_complete) {
+                throw std::runtime_error("Cannot redefine struct with identifier \"" + identifier + "\"");
+            }
+
+            entry->type = {structType, false};
         }
-    } else if (couldBeForwardDecl) {
-        localTable->addStruct(identifier);
+        return structType;
     }
-    auto *entry = localTable->findStruct(identifier);
+
+    const auto &identifier = specifier->get_identifier();
+    if (couldBeForwardDecl) {
+        local_table->addStruct(identifier);
+        return nullptr;
+    }
+    auto *entry = local_table->findStruct(identifier);
     if (!entry) {
         throw std::runtime_error("Could not find struct with identifier \"" + identifier + "\"");
     }
-    return entry;
+    assert(isa<StructType>(entry->type.type));
+    return cast<StructType>(entry->type.type);
 }
 
-void Sema::acceptStructDecl(const std::string &identifier, StructDeclList *declList) {
-    auto *entry = localTable->tryFindStruct(identifier);
-    if (!entry) {
-        entry = localTable->addStruct(identifier);
-    }
-
-    if (!entry->incomplete) {
-        throw std::runtime_error("Cannot redefine struct with identifier \"" + identifier + "\"");
-    }
-
+StructType *Sema::accept_struct_decl(StructDeclList *declList) {
+    StructType::MemberMap members;
     for (const auto &node : *declList) {
         const auto *structDecl = cast<StructDecl>(node.get());
 
-        auto entryParams = acceptDeclSpecifiers(cast<DeclSpecifiers>(structDecl->get_spec_qual()));
+        auto entryParams = accept_decl_specifiers(cast<DeclSpecifiers>(structDecl->get_spec_qual()));
         auto *declarator = cast<Declarator>(structDecl->get_declarator());
-        SymbolTable::Entry member = acceptDeclarator(declarator, entryParams);
-        entry->members.emplace(member.identifier, member);
+        SymbolTable::Entry member = accept_declarator(declarator, entryParams);
+
+        if (members.contains(member.identifier)) {
+            throw std::runtime_error("Redefinition of struct member \"" + member.identifier + "\"");
+        }
+
+        members[member.identifier] = member.type;
     }
+
+    return StructType::get(*this, members);
 }
 
-void Sema::acceptInitDeclarator(InitDeclarator *initDeclarator, const SymbolTable::Entry &entryPrototype) {
-    acceptDeclarator(cast<Declarator>(initDeclarator->get_declarator()), entryPrototype);
-
+SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, QualType type) {
+    return accept_declarator(cast<Declarator>(initDeclarator->get_declarator()), type);
 }
 
 // Assume declarator is not abstract
-SymbolTable::Entry Sema::acceptDeclarator(Declarator *declarator, SymbolTable::Entry entryPrototype) {
+SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type) {
     assert(!declarator->is_abstract());
-
+    SymbolTable::Entry entry = {.type = type};
     auto *directDeclarator = declarator->get_direct_declarator();
     if (isa<DirectDeclarator>(directDeclarator)) {
-        entryPrototype.identifier = cast<DirectDeclarator>(directDeclarator)->get_identifier();
+        entry.identifier = cast<DirectDeclarator>(directDeclarator)->get_identifier();
     } else {
         assert(isa<Declarator>(directDeclarator));
-        entryPrototype = acceptDeclarator(cast<Declarator>(directDeclarator), entryPrototype);
+        entry = accept_declarator(cast<Declarator>(directDeclarator), type);
     }
 
     if (declarator->has_pointer()) {
-        auto *pointer = cast<Pointer>(declarator->get_pointer());
-        entryPrototype.indirection ++;
-        while (pointer->has_next_pointer()) {
-            entryPrototype.indirection ++;
+        auto *pointer = cast<AST::Pointer>(declarator->get_pointer());
+        do {
+            type = {.type = PointerType::get(*this, type), .is_const = pointer->is_const()};
             pointer = pointer->get_next_pointer();
         }
+        while (pointer != nullptr);
+        entry.type = type;
     }
 
-    return entryPrototype;
+    // TODO: Handle suffixes
+
+    return entry;
+}
+
+void Sema::accept_function_decl(FunctionDecl *functionDecl) {
+    auto *declSpecs = functionDecl->get_spec_quals();
+    auto *declarator = functionDecl->get_declarator();
+
+    const auto entryPrototype = accept_decl_specifiers(declSpecs);
+    const auto entry = accept_declarator(declarator, entryPrototype);
+    local_table->addSymbol(entry);
+
+    auto body = functionDecl->get_body();
+    accept_compound_statement(body);
+}
+
+void Sema::accept_compound_statement(CompoundStatement *compound_statement) {
+    compound_statement->set_symbol_table(std::make_shared<SymbolTable>(local_table));
+    local_table = compound_statement->get_symbol_table_raw();
+
+    for (auto &node : *compound_statement) {
+        assert(isa<Statement>(node.get()));
+        const auto statement = cast<Statement>(node.get());
+        accept_statement(statement);
+    }
+
+    local_table = local_table->parent_scope;
+}
+
+void Sema::accept_statement(Statement *statement) {
+    if (auto *compoundStmt = dyn_cast<CompoundStatement>(statement)) {
+        accept_compound_statement(compoundStmt);
+        return;
+    }
+
+    if (auto *exprStmt = dyn_cast<ExpressionStatement>(statement)) {
+        accept_expression(exprStmt->get_expression());
+        return;
+    }
+
+    if (auto *declStmt = dyn_cast<Decl>(statement)) {
+        accept_decl(declStmt);
+        return;
+    }
 }

@@ -9,8 +9,10 @@
 
 #include "ast.hpp"
 #include "../casting.hpp"
+#include "../sema/types.hpp"
 
 using std::unique_ptr;
+class SymbolTable;
 
 namespace AST {
     class Node;
@@ -28,7 +30,6 @@ namespace AST {
     public:
         enum NodeKind {
             NK_TranslationUnit,
-            NK_Decl,
             NK_DeclSpecifiers,
             NK_StorageClass,
             NK_TypeSpecifier,
@@ -49,6 +50,7 @@ namespace AST {
             NK_TypeName,
             NK_FunctionDecl,
             NK_Statement,
+            NK_Decl,
             NK_CompoundStatement,
             NK_ExpressionStatement,
             NK_SelectionStatement,
@@ -126,6 +128,9 @@ namespace AST {
         unique_ptr<Node> *nodes = nullptr;
         size_t size = 0;
 
+        // Semantic analysis
+        std::shared_ptr<SymbolTable> symbolTable;
+
     public:
         ~TranslationUnit() override {
             delete[] nodes;
@@ -133,6 +138,20 @@ namespace AST {
 
         [[nodiscard]] size_t get_size() const {
             return size;
+        }
+
+        // Semantic analysis
+
+        void set_symbol_table(std::shared_ptr<SymbolTable> newTable) {
+            this->symbolTable = std::move(newTable);
+        }
+
+        std::shared_ptr<SymbolTable> &get_symbol_table() {
+            return symbolTable;
+        }
+
+        [[nodiscard]] SymbolTable *get_symbol_table_raw() const {
+            return symbolTable.get();
         }
 
         unique_ptr<Node> *begin() override {
@@ -184,11 +203,11 @@ namespace AST {
         }
     };
 
-    class Decl : public Node {
+    class Decl : public Statement {
         enum {DECL_SPECS, DECLARATOR_LIST};
         unique_ptr<Node> nodes[2];
     public:
-        Decl() : Node(NK_Decl) {}
+        Decl() : Statement(NK_Decl) {}
 
         [[nodiscard]] Node *get_decl_specs() const {
             return nodes[DECL_SPECS].get();
@@ -1045,7 +1064,7 @@ namespace AST {
     public:
         TypeName() : Node(NK_TypeName) {}
 
-        [[nodiscard]] Node *get_declarator() const {
+        [[nodiscard]] Node *get_abstract_declarator() const {
             return nodes[ABSTRACT_DECLARATOR].get();
         }
 
@@ -1092,16 +1111,16 @@ namespace AST {
 
     public:
         FunctionDecl() : Node(NK_FunctionDecl) {}
-        [[nodiscard]] const DeclSpecifiers &get_spec_quals() const {
-            return cast<DeclSpecifiers>(nodes[SPEC_QUALS]);
+        [[nodiscard]] DeclSpecifiers *get_spec_quals() const {
+            return cast<DeclSpecifiers>(nodes[SPEC_QUALS].get());
         }
 
-        [[nodiscard]] const Declarator &get_declarator() const {
-            return cast<Declarator>(nodes[DECLARATOR]);
+        [[nodiscard]] Declarator *get_declarator() const {
+            return cast<Declarator>(nodes[DECLARATOR].get());
         }
 
-        [[nodiscard]] const CompoundStatement &get_body() const {
-            return cast<CompoundStatement>(nodes[BODY]);
+        [[nodiscard]] CompoundStatement *get_body() const {
+            return cast<CompoundStatement>(nodes[BODY].get());
         }
 
         unique_ptr<Node> *begin() override {
@@ -1141,6 +1160,7 @@ namespace AST {
     class CompoundStatement : public Statement {
         unique_ptr<Node> *statements = nullptr;
         size_t size = 0;
+        std::shared_ptr<SymbolTable> symbolTable;
 
     public:
         CompoundStatement() : Statement(NK_CompoundStatement) {}
@@ -1150,6 +1170,18 @@ namespace AST {
 
         [[nodiscard]] size_t get_size() const {
             return size;
+        }
+
+        void set_symbol_table(std::shared_ptr<SymbolTable> newTable) {
+            symbolTable = std::move(newTable);
+        }
+
+        std::shared_ptr<SymbolTable> &get_symbol_table() {
+            return symbolTable;
+        }
+
+        [[nodiscard]] SymbolTable *get_symbol_table_raw() const {
+            return symbolTable.get();
         }
 
         unique_ptr<Node> *begin() override {
@@ -1192,6 +1224,11 @@ namespace AST {
         unique_ptr<Node> expression;
     public:
         ExpressionStatement() : Statement(NK_ExpressionStatement) {}
+
+        [[nodiscard]] Expression *get_expression() const {
+            return cast<Expression>(expression.get());
+        }
+
         [[nodiscard]] unique_ptr<Node> *begin() override {
             return &expression;
         }
@@ -1225,8 +1262,22 @@ namespace AST {
     };
 
     class Expression : public Node {
+        QualType type_info = {nullptr, false};
+
+        friend Sema;
+        void set_type(QualType type) {
+            type_info = type;
+        }
     public:
         explicit Expression(const NodeKind K) : Node(K) {}
+
+        [[nodiscard]] bool has_type_info() const {
+            return type_info.type != nullptr;
+        }
+
+        [[nodiscard]] const QualType & get_type_info() const {
+            return type_info;
+        }
 
         static bool classof(const Node *node) {
             return node->getKind() >= NK_Expression && node->getKind() <= NK_LastExpression;
@@ -1267,6 +1318,10 @@ namespace AST {
             return reinterpret_cast<const unique_ptr<Node> *>(expressions + size);
         }
 
+        [[nodiscard]] Expression * operator[](const size_t index) const {
+            return expressions[index].get();
+        }
+
         static unique_ptr<ExpressionList> create(std::vector<unique_ptr<Expression>> &expressions) {
             auto base = std::make_unique<ExpressionList>();
             base->expressions = new unique_ptr<Expression>[expressions.size()];
@@ -1299,6 +1354,19 @@ namespace AST {
 
     public:
         Assignment() : Expression(NK_Assignment) {}
+
+        [[nodiscard]] Op get_operation() const {
+            return operation;
+        }
+
+        [[nodiscard]] Expression *get_lhs() const {
+            return nodes[LVALUE].get();
+        }
+
+        [[nodiscard]] Expression *get_rhs() const {
+            return nodes[RVALUE].get();
+        }
+
         unique_ptr<Node> *begin() override {
             return reinterpret_cast<unique_ptr<Node> *>(nodes);
         }
@@ -1363,6 +1431,19 @@ namespace AST {
         Op operation = LOGIC_OR;
     public:
         BinOp() : Expression(NK_BinOp) {}
+
+        [[nodiscard]] Op get_operation() const {
+            return operation;
+        }
+
+        [[nodiscard]] Expression *get_lhs() const {
+            return nodes[LVALUE].get();
+        }
+
+        [[nodiscard]] Expression *get_rhs() const {
+            return nodes[RVALUE].get();
+        }
+
         unique_ptr<Node> *begin() override {
             return reinterpret_cast<unique_ptr<Node> *>(nodes);
         }
@@ -1402,6 +1483,15 @@ namespace AST {
 
     public:
         Cast() : Expression(NK_Cast) {}
+
+        [[nodiscard]] TypeName *get_type_name() const {
+            return cast<TypeName>(nodes[TYPE_NAME].get());
+        }
+
+        [[nodiscard]] Expression *get_expression() const {
+            return cast<Expression>(nodes[EXPRESSION].get());
+        }
+
         unique_ptr<Node> *begin() override {
             return nodes;
         }
@@ -1453,6 +1543,31 @@ namespace AST {
         unique_ptr<Expression> rhs;
     public:
         UnaryOp() : Expression(NK_UnaryOp) {}
+
+        [[nodiscard]] Op get_operation() const {
+            return operation;
+        }
+
+        [[nodiscard]] Expression *get_rhs() const {
+            return rhs.get();
+        }
+
+        unique_ptr<Node> * begin() override {
+            return reinterpret_cast<unique_ptr<Node> *>(&rhs);
+        }
+
+        [[nodiscard]] const unique_ptr<Node> * begin() const override {
+            return reinterpret_cast<const unique_ptr<Node> *>(&rhs);
+        }
+
+        unique_ptr<Node> * end() override {
+            return reinterpret_cast<unique_ptr<Node> *>(&rhs + 1);
+        }
+
+        [[nodiscard]] const unique_ptr<Node> * end() const override {
+            return reinterpret_cast<const unique_ptr<Node> *>(&rhs + 1);
+        }
+
         static unique_ptr<UnaryOp> create(unique_ptr<Expression> expr, const Op operation) {
             auto base = std::make_unique<UnaryOp>();
             base->rhs = std::move(expr);
@@ -1474,6 +1589,11 @@ namespace AST {
 
     public:
         SizeofType() : Expression(NK_SizeofType) {}
+
+        [[nodiscard]] Node *get_type_name() const {
+            return typeName.get();
+        }
+
         unique_ptr<Node> *begin() override {
             return &typeName;
         }
@@ -1520,26 +1640,35 @@ namespace AST {
 
     class IndexExpression : public Postfix {
         enum {EXPRESSION, INDEX};
-        unique_ptr<Node> nodes[2];
+        unique_ptr<Expression> nodes[2];
     public:
         IndexExpression() : Postfix(NK_IndexExpression) {}
+
+        [[nodiscard]] Expression *get_lhs() const {
+            return nodes[EXPRESSION].get();
+        }
+
+        [[nodiscard]] Expression *get_index() const {
+            return nodes[INDEX].get();
+        }
+
         unique_ptr<Node> *begin() override {
-            return nodes;
+            return reinterpret_cast<unique_ptr<Node> *>(nodes);
         }
 
         [[nodiscard]] const unique_ptr<Node> *begin() const override {
-            return nodes;
+            return reinterpret_cast<const unique_ptr<Node> *>(nodes);
         }
 
         unique_ptr<Node> *end() override {
-            return &nodes[2];
+            return reinterpret_cast<unique_ptr<Node> *>(nodes + 2);
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return &nodes[2];
+            return reinterpret_cast<const unique_ptr<Node> *>(nodes + 2);
         }
 
-        static unique_ptr<IndexExpression> create(unique_ptr<Node> expression, unique_ptr<Node> index) {
+        static unique_ptr<IndexExpression> create(unique_ptr<Expression> expression, unique_ptr<Expression> index) {
             auto base = std::make_unique<IndexExpression>();
             base->nodes[EXPRESSION] = std::move(expression);
             base->nodes[INDEX] = std::move(index);
@@ -1560,6 +1689,15 @@ namespace AST {
         unique_ptr<Node> nodes[2];
     public:
         FunctionCall() : Postfix(NK_FunctionCall) {}
+
+        [[nodiscard]] Expression *get_lhs() const {
+            return cast<Expression>(nodes[EXPRESSION].get());
+        }
+
+        [[nodiscard]] Node *get_argument_list() const {
+            return nodes[ARGUMENT_LIST].get();
+        }
+
         unique_ptr<Node> *begin() override {
             return nodes;
         }
@@ -1604,6 +1742,11 @@ namespace AST {
         AssignmentType operation = INCREMENT;
     public:
         PostAssignment() : Postfix(NK_PostAssignment) {}
+
+        [[nodiscard]] Expression *get_lhs() const {
+            return cast<Expression>(expression.get());
+        }
+
         unique_ptr<Node> *begin() override {
             return &expression;
         }
@@ -1642,28 +1785,41 @@ namespace AST {
             MEMBER,
         };
     private:
-        unique_ptr<Node> expression;
+        unique_ptr<Expression> expression;
         MemberAccessType operation = MEMBER;
         std::string identifier;
     public:
         MemberAccess() : Postfix(NK_MemberAccess) {}
+
+        [[nodiscard]] Expression *get_lhs() const {
+            return expression.get();
+        }
+
+        [[nodiscard]] const std::string &get_rhs() const {
+            return identifier;
+        }
+
+        [[nodiscard]] MemberAccessType get_access_type() const {
+            return this->operation;
+        }
+
         unique_ptr<Node> *begin() override {
-            return &expression;
+            return reinterpret_cast<unique_ptr<Node> *>(&expression);
         }
 
         [[nodiscard]] const unique_ptr<Node> *begin() const override {
-            return &expression;
+            return reinterpret_cast<const unique_ptr<Node> *>(&expression);
         }
 
         unique_ptr<Node> *end() override {
-            return &expression + 1;
+            return reinterpret_cast<unique_ptr<Node> *>(&expression + 1);
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return &expression + 1;
+            return reinterpret_cast<const unique_ptr<Node> *>(&expression + 1);
         }
 
-        static unique_ptr<MemberAccess> create(unique_ptr<Node> expression, const MemberAccessType operation, std::string identifier) {
+        static unique_ptr<MemberAccess> create(unique_ptr<Expression> expression, const MemberAccessType operation, std::string identifier) {
             auto base = std::make_unique<MemberAccess>();
             base->expression = std::move(expression);
             base->operation = operation;

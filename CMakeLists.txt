@@ -10,6 +10,7 @@ add_executable(c_compiler src/main.cpp
         src/lexer.cpp
         src/parsing/parse.cpp
         src/parsing/ast.cpp
+        src/parsing/ast.hpp
         src/sema/sema.cpp
         src/sema/sema.hpp
         src/gen/mips/mips_target.cpp
@@ -17,8 +18,11 @@ add_executable(c_compiler src/main.cpp
         src/gen/ASM_gen.cpp
         src/gen/ASM_gen.hpp
         src/sema/symbol_table.cpp
-        src/sema/symbol_table.hpp
         src/casting.hpp
+        src/sema/expressions.cpp
+        src/sema/types.cpp
+        src/sema/types.hpp
+        src/hash_combine.hpp
 )
 add_executable(c_compiler_test test/main.cpp
         test/execute.cpp

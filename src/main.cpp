@@ -3,6 +3,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 #include "lexer.hpp"
 #include "parsing/parse.hpp"
@@ -62,7 +63,9 @@ int main(const int argc, char *argv[]) {
     const auto ast = parser.parse(inputFile);
 
     Sema sema;
-    sema.acceptAST(ast.get());
+
+
+    sema.accept_ast(ast.get());
 
     if (options.outFile.empty()) {
         std::cout << ast << std::endl;

@@ -4,27 +4,122 @@
 
 #ifndef SEMA_HPP
 #define SEMA_HPP
-#include <memory>
+#include <list>
+#include <map>
 
-#include "symbol_table.hpp"
-#include "symbol_table.hpp"
 #include "../parsing/ast.hpp"
+#include "./types.hpp"
 
 using namespace AST;
 
-class Sema {
-private:
-    SymbolTable globalTable = SymbolTable(nullptr);
-    SymbolTable *localTable = &globalTable;
+// ----------------------------
+// Symbol Table
+// ----------------------------
+
+class SymbolTable {
 public:
-    void acceptAST(Node *ast);
-    void acceptDecl(Decl *decl);
-    SymbolTable::Entry acceptDeclSpecifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl);
-    SymbolTable::Entry *acceptStructSpecifier(StructSpecifier *specifier, bool couldBeForwardDecl);
-    void acceptStructDecl(const std::string &identifier, StructDeclList *declList);
-    void acceptInitDeclarator(InitDeclarator *initDeclarator, const SymbolTable::Entry &entryPrototype);
-    SymbolTable::Entry acceptDeclarator(Declarator *declarator, SymbolTable::Entry entryPrototype);
-    void acceptFunctionDecl(FunctionDecl *functionDecl);
+    struct Entry {
+        std::string identifier;
+        bool is_complete = true;
+        QualType type;
+
+        static Entry create(const std::string &identifier, QualType type);
+    };
+
+    SymbolTable(SymbolTable &) = delete;
+    SymbolTable & operator=(const SymbolTable &) = delete;
+
+    std::map<std::string, Entry> structs;
+    std::map<std::string, Entry> symbols;
+    SymbolTable *parent_scope = nullptr;
+
+    explicit SymbolTable(SymbolTable * parent) : parent_scope(parent) {
+    }
+
+    Entry *addStruct(const std::string &identifier);
+
+    Entry *addSymbol(const Entry &entry);
+    Entry *addSymbol(const std::string &identifier, QualType type);
+
+    Entry *tryFindStruct(const std::string &identifier);
+
+    Entry *tryFindSymbol(const std::string &identifier);
+
+    Entry *findStruct(const std::string &identifier);
+
+    Entry *findSymbol(const std::string &identifier);
+
+    [[nodiscard]] bool isLocallyDefinedSymbol(const std::string &identifier) const;
+
+    [[nodiscard]] bool isLocallyDefinedStruct(const std::string &identifier) const;
 };
+
+// ----------------------------
+// Semantic Analysis
+// ----------------------------
+
+class Sema {
+public:
+    using HashValue = std::size_t;
+    Type void_type = Type(Void);
+    std::map<HashValue, IntegerType> integer_types;
+    std::map<HashValue, PointerType> pointer_types;
+    std::map<HashValue, StructType> struct_types;
+    std::map<HashValue, ArrayType> array_types;
+    std::map<HashValue, FunctionType> function_types;
+    SymbolTable *global_table = nullptr;
+    SymbolTable *local_table = nullptr;
+
+    // ---------
+    // Acceptors
+    // ---------
+    void accept_ast(Node *ast);
+private:
+    void accept_decl(Decl *decl);
+
+    QualType accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl);
+
+    StructType *accept_struct_specifier(StructSpecifier *specifier, bool couldBeForwardDecl);
+
+    StructType *accept_struct_decl(StructDeclList *declList);
+
+    SymbolTable::Entry accept_init_declarator(InitDeclarator *initDeclarator, QualType type);
+    SymbolTable::Entry accept_declarator(Declarator *declarator, QualType type);
+    void accept_function_decl(FunctionDecl *functionDecl);
+    void accept_compound_statement(CompoundStatement *compound_statement);
+    void accept_statement(Statement *statement);
+
+    QualType accept_expression(Expression *expression);
+    QualType accept_expression_list(ExpressionList *expressionList);
+    QualType accept_assignment(Assignment *assignment);
+    QualType accept_bin_op(BinOp *binOp);
+    QualType accept_cast(Cast *cast);
+    QualType accept_unary_op(UnaryOp *unaryOp);
+    QualType accept_sizeof(SizeofType *type);
+    QualType accept_index_expression(IndexExpression *indexExpression);
+    QualType accept_function_call(FunctionCall *functionCall);
+    QualType accept_post_assignment(PostAssignment *postAssignment);
+    QualType accept_member_access(MemberAccess *memberAccess);
+    QualType accept_identifier(Identifier *identifier);
+    QualType accept_constant(Constant *constant);
+    QualType accept_string_literal(StringLiteral *stringLiteral);
+
+    // -------
+    // Helpers
+    // -------
+public:
+    static bool is_lvalue(const Expression *expression);
+    static bool is_rvalue(const Expression *expression);
+
+    // Type Comparisons
+    static bool are_compatible(const Type *left, const Type *right);
+    static bool is_scalar_type(const Type *type);
+
+    static bool is_valid_bin_op(const Type *lType, const Type *rType, BinOp::Op operation);
+    static Type *integer_promotion(Sema& ctx, Type *type);
+    static Type *usual_arithmetic_conversions(Sema& ctx, Type *lType, Type *rType);
+    static QualType dereference_pointer(Sema &ctx, Type *type);
+};
+
 
 #endif //SEMA_HPP
