@@ -14,7 +14,7 @@ void Sema::accept_ast(Node *ast) {
         tu->set_symbol_table(std::make_shared<SymbolTable>(nullptr));
         global_table = tu->get_symbol_table_raw();
         local_table = global_table;
-        for (const auto & node: *tu) {
+        for (const auto &node: *tu) {
             if (isa<Decl>(node)) {
                 accept_decl(cast<Decl>(node.get()));
             } else if (isa<FunctionDecl>(node)) {
@@ -51,13 +51,13 @@ void Sema::accept_decl(Decl *decl) {
     }
 }
 
-PrimitiveType convertFromTypeSpec(TypeSpecifier::TypeSpecifierType type, bool isSigned) {
+PrimitiveType convertFromTypeSpec(const TypeSpecifier::TypeSpecifierType type, const bool isSigned, const bool signMarked) {
     switch (type) {
         case TypeSpecifier::VOID:
             return Void;
         case TypeSpecifier::CHAR:
             if (isSigned)
-                return SignedChar;
+                return signMarked ? SignedChar : Char;
             return UnsignedChar;
         case TypeSpecifier::SHORT:
             if (isSigned)
@@ -135,7 +135,7 @@ QualType Sema::accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeFo
     if (type != nullptr) {
         return {type, isConst};
     }
-    return {Type::get(*this, convertFromTypeSpec(sType.value(), isSigned)), isConst};
+    return {Type::get(*this, convertFromTypeSpec(sType.value(), isSigned, signMarked)), isConst};
 }
 
 StructType *Sema::accept_struct_specifier(StructSpecifier *specifier, bool couldBeForwardDecl) {
@@ -173,7 +173,7 @@ StructType *Sema::accept_struct_specifier(StructSpecifier *specifier, bool could
 
 StructType *Sema::accept_struct_decl(StructDeclList *declList) {
     StructType::MemberMap members;
-    for (const auto &node : *declList) {
+    for (const auto &node: *declList) {
         const auto *structDecl = cast<StructDecl>(node.get());
 
         auto entryParams = accept_decl_specifiers(cast<DeclSpecifiers>(structDecl->get_spec_qual()));
@@ -190,8 +190,17 @@ StructType *Sema::accept_struct_decl(StructDeclList *declList) {
     return StructType::get(*this, members);
 }
 
-SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, QualType type) {
-    return accept_declarator(cast<Declarator>(initDeclarator->get_declarator()), type);
+SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, const QualType type) {
+    auto *declarator = cast<Declarator>(initDeclarator->get_declarator());
+    SymbolTable::Entry entry = accept_declarator(declarator, type);
+    if (initDeclarator->has_initializer()) {
+        auto *initExpr = cast<Expression>(initDeclarator->get_initializer());
+        auto assignmentType = accept_expression(initExpr);
+        if (!are_implicitly_convertable(entry.type.type, assignmentType.type)) {
+            throw std::runtime_error("Assignment of incompatible types is forbidden");
+        }
+    }
+    return entry;
 }
 
 // Assume declarator is not abstract
@@ -211,8 +220,7 @@ SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type
         do {
             type = {.type = PointerType::get(*this, type), .is_const = pointer->is_const()};
             pointer = pointer->get_next_pointer();
-        }
-        while (pointer != nullptr);
+        } while (pointer != nullptr);
         entry.type = type;
     }
 
@@ -237,7 +245,7 @@ void Sema::accept_compound_statement(CompoundStatement *compound_statement) {
     compound_statement->set_symbol_table(std::make_shared<SymbolTable>(local_table));
     local_table = compound_statement->get_symbol_table_raw();
 
-    for (auto &node : *compound_statement) {
+    for (auto &node: *compound_statement) {
         assert(isa<Statement>(node.get()));
         const auto statement = cast<Statement>(node.get());
         accept_statement(statement);
@@ -247,18 +255,44 @@ void Sema::accept_compound_statement(CompoundStatement *compound_statement) {
 }
 
 void Sema::accept_statement(Statement *statement) {
-    if (auto *compoundStmt = dyn_cast<CompoundStatement>(statement)) {
-        accept_compound_statement(compoundStmt);
-        return;
+    try {
+        if (auto *compoundStmt = dyn_cast<CompoundStatement>(statement)) {
+            accept_compound_statement(compoundStmt);
+        } else if (auto *exprStmt = dyn_cast<ExpressionStatement>(statement)) {
+            accept_expression(exprStmt->get_expression());
+        } else if (auto *declStmt = dyn_cast<Decl>(statement)) {
+            accept_decl(declStmt);
+        } else if (auto *selectionStmt = dyn_cast<SelectionStatement>(statement)) {
+            accept_selection_statement(selectionStmt);
+        } else if (auto *whileStmt = dyn_cast<WhileStatement>(statement)) {
+            accept_while_statement(whileStmt);
+        } else if (auto *doStmt = dyn_cast<DoStatement>(statement)) {
+            accept_do_statement(doStmt);
+        } else if (auto *forStmt = dyn_cast<ForStatement>(statement)) {
+            accept_for_statement(forStmt);
+        } else if (auto *controlStmt = dyn_cast<ControlStatement>(statement)) {
+            accept_control_statement(controlStmt);
+        } else {
+            throw std::runtime_error("Unexpected statement type");
+        }
+    } catch (std::runtime_error &e) {
+        throw;
     }
+}
 
-    if (auto *exprStmt = dyn_cast<ExpressionStatement>(statement)) {
-        accept_expression(exprStmt->get_expression());
-        return;
-    }
+void Sema::accept_selection_statement(SelectionStatement *selectionStatement) {
+    auto *condition = selectionStatement->get_condition();
+    QualType type = accept_expression(condition);
+}
 
-    if (auto *declStmt = dyn_cast<Decl>(statement)) {
-        accept_decl(declStmt);
-        return;
-    }
+void Sema::accept_while_statement(WhileStatement *whileStatement) {
+}
+
+void Sema::accept_do_statement(DoStatement *doStatement) {
+}
+
+void Sema::accept_for_statement(ForStatement *forStatement) {
+}
+
+void Sema::accept_control_statement(ControlStatement *controlStatement) {
 }

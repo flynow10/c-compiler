@@ -88,6 +88,11 @@ private:
     void accept_function_decl(FunctionDecl *functionDecl);
     void accept_compound_statement(CompoundStatement *compound_statement);
     void accept_statement(Statement *statement);
+    void accept_selection_statement(SelectionStatement *selectionStatement);
+    void accept_while_statement(WhileStatement *whileStatement);
+    void accept_do_statement(DoStatement *doStatement);
+    void accept_for_statement(ForStatement *forStatement);
+    void accept_control_statement(ControlStatement *controlStatement);
 
     QualType accept_expression(Expression *expression);
     QualType accept_expression_list(ExpressionList *expressionList);
@@ -112,13 +117,13 @@ public:
     static bool is_rvalue(const Expression *expression);
 
     // Type Comparisons
-    static bool are_compatible(const Type *left, const Type *right);
+    static bool are_implicitly_convertable(const Type *left, const Type *right);
     static bool is_scalar_type(const Type *type);
 
     static bool is_valid_bin_op(const Type *lType, const Type *rType, BinOp::Op operation);
     static Type *integer_promotion(Sema& ctx, Type *type);
     static Type *usual_arithmetic_conversions(Sema& ctx, Type *lType, Type *rType);
-    static QualType dereference_pointer(Sema &ctx, Type *type);
+    static QualType dereference_pointer(Type *type);
 };
 
 

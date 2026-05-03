@@ -8,41 +8,29 @@ QualType Sema::accept_expression(Expression *expression) {
     QualType type;
     if (auto *list = dyn_cast<ExpressionList>(expression)) {
         type = accept_expression_list(list);
-    }
-    else if (auto *assignment = dyn_cast<Assignment>(expression)) {
+    } else if (auto *assignment = dyn_cast<Assignment>(expression)) {
         type = accept_assignment(assignment);
-    }
-    else if (auto *binOp = dyn_cast<BinOp>(expression)) {
+    } else if (auto *binOp = dyn_cast<BinOp>(expression)) {
         type = accept_bin_op(binOp);
-    }
-    else if (auto *cast = dyn_cast<Cast>(expression)) {
+    } else if (auto *cast = dyn_cast<Cast>(expression)) {
         type = accept_cast(cast);
-    }
-    else if (auto *unaryOp = dyn_cast<UnaryOp>(expression)) {
+    } else if (auto *unaryOp = dyn_cast<UnaryOp>(expression)) {
         type = accept_unary_op(unaryOp);
-    }
-    else if (auto *sizeofType = dyn_cast<SizeofType>(expression)) {
+    } else if (auto *sizeofType = dyn_cast<SizeofType>(expression)) {
         type = accept_sizeof(sizeofType);
-    }
-    else if (auto *indexExpression = dyn_cast<IndexExpression>(expression)) {
+    } else if (auto *indexExpression = dyn_cast<IndexExpression>(expression)) {
         type = accept_index_expression(indexExpression);
-    }
-    else if (auto *functionCall = dyn_cast<FunctionCall>(expression)) {
+    } else if (auto *functionCall = dyn_cast<FunctionCall>(expression)) {
         type = accept_function_call(functionCall);
-    }
-    else if (auto *postAssignment = dyn_cast<PostAssignment>(expression)) {
+    } else if (auto *postAssignment = dyn_cast<PostAssignment>(expression)) {
         type = accept_post_assignment(postAssignment);
-    }
-    else if (auto *memberAccess = dyn_cast<MemberAccess>(expression)) {
+    } else if (auto *memberAccess = dyn_cast<MemberAccess>(expression)) {
         type = accept_member_access(memberAccess);
-    }
-    else if (auto *identifier = dyn_cast<Identifier>(expression)) {
+    } else if (auto *identifier = dyn_cast<Identifier>(expression)) {
         type = accept_identifier(identifier);
-    }
-    else if (auto *constant = dyn_cast<Constant>(expression)) {
+    } else if (auto *constant = dyn_cast<Constant>(expression)) {
         type = accept_constant(constant);
-    }
-    else if (auto *stringLiteral = dyn_cast<StringLiteral>(expression)) {
+    } else if (auto *stringLiteral = dyn_cast<StringLiteral>(expression)) {
         type = accept_string_literal(stringLiteral);
     } else {
         throw std::runtime_error("Unknown expression type");
@@ -72,7 +60,7 @@ QualType Sema::accept_assignment(Assignment *assignment) {
         throw std::runtime_error("Cannot assign to constant expression");
     }
     auto rType = accept_expression(rhs);
-    if (!are_compatible(lType.type, rType.type)) {
+    if (!are_implicitly_convertable(lType.type, rType.type)) {
         throw std::runtime_error("Assignment of incompatible types is forbidden");
     }
     return lType;
@@ -105,12 +93,33 @@ QualType Sema::accept_cast(Cast *cast) {
 
 QualType Sema::accept_unary_op(UnaryOp *unaryOp) {
     auto *rhs = unaryOp->get_rhs();
-    if (unaryOp->get_operation() == UnaryOp::ADDRESS_OF) {
-        if (is_lvalue(rhs)) {
+    auto rType = accept_expression(rhs);
+    auto operation = unaryOp->get_operation();
+
+    if (operation == UnaryOp::ADDRESS_OF) {
+        if (!is_lvalue(rhs)) {
             throw std::runtime_error("Address of operation is not allowed on non lvalue types");
         }
+        return {PointerType::get(*this, rType), true};
     }
-    auto rType = accept_expression(rhs);
+
+    if (operation == UnaryOp::DEREFERENCE) {
+        return dereference_pointer(rType.type);
+    }
+
+    if (operation == UnaryOp::SIZEOF) {
+        return {IntegerType::get(*this, UnsignedInt), true};
+    }
+
+    if (operation == UnaryOp::INCREMENT || operation == UnaryOp::DECREMENT) {
+        if (!is_lvalue(rhs)) {
+            throw std::runtime_error("Cannot increment or decrement non lvalue types");
+        }
+        if (rType.is_const) {
+            throw std::runtime_error("Cannot increment or decrement to constant expression");
+        }
+    }
+
     return rType;
 }
 
@@ -127,7 +136,7 @@ QualType Sema::accept_index_expression(IndexExpression *indexExpression) {
     }
     auto &pointerType = lType.is_pointer() ? lType : indexType;
     auto &integerType = lType.is_integer() ? lType : indexType;
-    return dereference_pointer(*this, pointerType.type);
+    return dereference_pointer(pointerType.type);
 }
 
 QualType Sema::accept_function_call(FunctionCall *functionCall) {
@@ -148,10 +157,10 @@ QualType Sema::accept_member_access(MemberAccess *memberAccess) {
     QualType rhsType = accept_expression(memberAccess->get_lhs());
 
     if (memberAccess->get_access_type() == MemberAccess::POINTER) {
-        rhsType = dereference_pointer(*this, rhsType.type);
+        rhsType = dereference_pointer(rhsType.type);
     }
 
-    const auto& memberId = memberAccess->get_rhs();
+    const auto &memberId = memberAccess->get_rhs();
     if (!isa<StructType>(rhsType.type)) {
         throw std::runtime_error("Cannot access member of non-struct type");
     }
@@ -170,11 +179,48 @@ QualType Sema::accept_identifier(Identifier *identifier) {
 }
 
 QualType Sema::accept_constant(Constant *constant) {
+    auto &constantValue = constant->get_value();
+    return {IntegerType::get(*this, Int), true};
 }
 
 QualType Sema::accept_string_literal(StringLiteral *stringLiteral) {
+    auto &stringValue = stringLiteral->get_value();
+    auto *charType = IntegerType::get(*this, Char);
+    auto *arrayType = ArrayType::get(*this, {charType, true}, stringValue.size());
+    return {arrayType, true};
     // TODO: Implement Arrays
 }
+
+// ----------------------------
+// Integer Rank
+// ----------------------------
+
+typedef unsigned short Rank;
+constexpr Rank INTEGER_RANK = 3;
+
+Rank get_integer_rank(const PrimitiveType type) {
+    switch (type) {
+        case Char:
+        case SignedChar:
+        case UnsignedChar:
+            return 1;
+        case Short:
+        case UnsignedShort:
+            return 2;
+        case Int:
+        case UnsignedInt:
+            return 3;
+        case Long:
+        case UnsignedLong:
+            return 4;
+        default:
+            throw std::runtime_error("Cannot find the rank of non integer types");
+    }
+}
+
+// ----------------------------
+// Helper Functions
+// ----------------------------
 
 bool Sema::is_lvalue(const Expression *expression) {
     if (isa<Identifier, StringLiteral, IndexExpression>(expression)) {
@@ -226,9 +272,13 @@ bool Sema::is_rvalue(const Expression *expression) {
     return false;
 }
 
-bool Sema::are_compatible(const Type *left, const Type *right) {
+bool Sema::are_implicitly_convertable(const Type *left, const Type *right) {
     // TODO: Make better compatibility test
     if (left->type == right->type) {
+        return true;
+    }
+
+    if (left->is_integer() && right->is_integer()) {
         return true;
     }
 
@@ -283,28 +333,6 @@ bool Sema::is_valid_bin_op(const Type *lType, const Type *rType, BinOp::Op opera
     return false;
 }
 
-typedef unsigned short Rank;
-constexpr Rank INTEGER_RANK = 3;
-
-Rank get_integer_rank(const PrimitiveType type) {
-    switch (type) {
-        case Char:
-        case SignedChar:
-        case UnsignedChar:
-            return 1;
-        case Short:
-        case UnsignedShort:
-            return 2;
-        case Int:
-        case UnsignedInt:
-            return 3;
-        case Long:
-        case UnsignedLong:
-            return 4;
-        default:
-            throw std::runtime_error("Cannot find the rank of non integer types");
-    }
-}
 
 Type *Sema::integer_promotion(Sema &ctx, Type *type) {
     if (Rank rank = get_integer_rank(type->type); rank < INTEGER_RANK) {
@@ -337,8 +365,7 @@ Type *Sema::usual_arithmetic_conversions(Sema &ctx, Type *lType, Type *rType) {
     return signedType;
 }
 
-QualType Sema::dereference_pointer(Sema &ctx, Type *type) {
-    // TODO: Implement pointers
+QualType Sema::dereference_pointer(Type *type) {
     if (!isa<PointerType>(type)) {
         throw std::runtime_error("Cannot dereference type which is not a PointerType");
     }

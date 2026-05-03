@@ -112,7 +112,7 @@ private:
     }
 
 public:
-    static StructType *get(Sema &ctx, MemberMap &members);
+    static StructType *get(Sema &ctx, const MemberMap &members);
 
     static bool classof(const Type *type) {
         return type->type == Struct;
@@ -125,11 +125,10 @@ struct ArrayType : Type {
 
 private:
     ArrayType(QualType elementType, size_t numElements) : Type(Array), element_type(elementType),
-                                                          num_elements(numElements) {
-    }
+                                                          num_elements(numElements) {}
 
 public:
-    static ArrayType *get(Sema &ctx, Type *type, size_t num_elements);
+    static ArrayType *get(Sema &ctx, QualType elementType, size_t num_elements);
 
     static bool classof(const Type *type) {
         return type->type == Array;

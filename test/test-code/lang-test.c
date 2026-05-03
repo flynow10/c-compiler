@@ -1,10 +1,5 @@
-#include <stdio.h>
-int test = 3;
-
-int main() {
-    unsigned char x = 0;
-    unsigned char y = 10;
-    auto test = x - y;
-    printf("%u\n", );
-    return 0;
-}
+char a = 0;
+int b = a - 2;
+char *c = &a;
+char **d = &c;
+// int **e = &(&b);

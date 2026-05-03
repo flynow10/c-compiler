@@ -23,6 +23,8 @@ add_executable(c_compiler src/main.cpp
         src/sema/types.cpp
         src/sema/types.hpp
         src/hash_combine.hpp
+        src/sema/exceptions.cpp
+        src/sema/exceptions.hpp
 )
 add_executable(c_compiler_test test/main.cpp
         test/execute.cpp

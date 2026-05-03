@@ -59,11 +59,20 @@ PointerType * PointerType::get(Sema &ctx, QualType pointedType) {
     return &ctx.pointer_types.emplace(hash, pType).first->second;
 }
 
-StructType * StructType::get(Sema &ctx, std::map<std::string, QualType> &members) {
+StructType * StructType::get(Sema &ctx, const std::map<std::string, QualType> &members) {
     StructType sType{members};
     size_t hash = std::hash<StructType>{}(sType);
     if (const auto type = ctx.struct_types.find(hash); type != ctx.struct_types.end()) {
         return &type->second;
     }
     return &ctx.struct_types.emplace(hash, sType).first->second;
+}
+
+ArrayType * ArrayType::get(Sema &ctx, QualType elementType, size_t num_elements) {
+    ArrayType aType{elementType, num_elements};
+    size_t hash = std::hash<ArrayType>{}(aType);
+    if (const auto type = ctx.array_types.find(hash); type != ctx.array_types.end()) {
+        return &type->second;
+    }
+    return &ctx.array_types.emplace(hash, aType).first->second;
 }

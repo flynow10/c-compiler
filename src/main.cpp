@@ -63,8 +63,6 @@ int main(const int argc, char *argv[]) {
     const auto ast = parser.parse(inputFile);
 
     Sema sema;
-
-
     sema.accept_ast(ast.get());
 
     if (options.outFile.empty()) {

@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <span>
 
 #include "ast.hpp"
 #include "../casting.hpp"
@@ -127,6 +128,9 @@ namespace AST {
     private:
         unique_ptr<Node> *nodes = nullptr;
         size_t size = 0;
+#ifndef NDEBUG
+        std::span<unique_ptr<Node>> _nodes = {nodes, 0};
+#endif
 
         // Semantic analysis
         std::shared_ptr<SymbolTable> symbolTable;
@@ -177,6 +181,10 @@ namespace AST {
             for (int i = 0; i < nodes.size(); ++i) {
                 base->nodes[i] = std::move(nodes[i]);
             }
+#ifndef NDEBUG
+            base->_nodes = {base->nodes, base->size};
+#endif
+
             return base;
         }
 
@@ -997,9 +1005,9 @@ namespace AST {
 
         static unique_ptr<InitDeclarator> create(unique_ptr<Node> declarator, unique_ptr<Node> initializer) {
             auto base = std::make_unique<InitDeclarator>();
+            base->hasInitializer = initializer != nullptr;
             base->nodes[DECLARATOR] = std::move(declarator);
             base->nodes[INITIALIZER] = std::move(initializer);
-            base->hasInitializer = initializer != nullptr;
             return base;
         }
 
@@ -1913,15 +1921,15 @@ namespace AST {
 
     public:
         SelectionStatement() : Statement(NK_SelectionStatement) {}
-        [[nodiscard]] const Expression &get_condition() const {
-            return cast<Expression>(nodes[CONDITION]);
+        [[nodiscard]] Expression *get_condition() const {
+            return cast<Expression>(nodes[CONDITION].get());
         }
 
-        [[nodiscard]] const CompoundStatement &get_then() const {
-            return cast<CompoundStatement>(nodes[IF_BODY]);
+        [[nodiscard]] CompoundStatement *get_then() const {
+            return cast<CompoundStatement>(nodes[IF_BODY].get());
         }
 
-        [[nodiscard]] const CompoundStatement *get_else() const {
+        [[nodiscard]] CompoundStatement *get_else() const {
             if (!hasElse) return nullptr;
             return cast<CompoundStatement>(nodes[ELSE_BODY].get());
         }
@@ -1951,10 +1959,10 @@ namespace AST {
         static unique_ptr<SelectionStatement> create(unique_ptr<Node> condition,
                                                      unique_ptr<Node> trueBody, unique_ptr<Node> falseBody) {
             auto base = std::make_unique<SelectionStatement>();
+            base->hasElse = falseBody != nullptr;
             base->nodes[CONDITION] = std::move(condition);
             base->nodes[IF_BODY] = std::move(trueBody);
             base->nodes[ELSE_BODY] = std::move(falseBody);
-            base->hasElse = base->nodes[ELSE_BODY] != nullptr;
             return base;
         }
 
@@ -1974,12 +1982,12 @@ namespace AST {
 
     public:
         WhileStatement() : Statement(NK_WhileStatement) {}
-        [[nodiscard]] const Expression &get_condition() const {
-            return cast<Expression>(nodes[CONDITION]);
+        [[nodiscard]] const Expression *get_condition() const {
+            return cast<Expression>(nodes[CONDITION].get());
         }
 
-        [[nodiscard]] const CompoundStatement &get_body() const {
-            return cast<CompoundStatement>(nodes[BODY]);
+        [[nodiscard]] const CompoundStatement *get_body() const {
+            return cast<CompoundStatement>(nodes[BODY].get());
         }
 
         unique_ptr<Node> *begin() override {
@@ -2021,12 +2029,12 @@ namespace AST {
 
     public:
         DoStatement() : Statement(NK_DoStatement) {}
-        [[nodiscard]] const Expression &get_condition() const {
-            return cast<Expression>(nodes[CONDITION]);
+        [[nodiscard]] const Expression *get_condition() const {
+            return cast<Expression>(nodes[CONDITION].get());
         }
 
-        [[nodiscard]] const CompoundStatement &get_body() const {
-            return cast<CompoundStatement>(nodes[BODY]);
+        [[nodiscard]] const CompoundStatement *get_body() const {
+            return cast<CompoundStatement>(nodes[BODY].get());
         }
 
         unique_ptr<Node> *begin() override {
@@ -2087,8 +2095,8 @@ namespace AST {
             return cast<Expression>(nodes[INCREMENT].get());
         }
 
-        [[nodiscard]] const CompoundStatement &get_body() const {
-            return cast<CompoundStatement>(nodes[BODY]);
+        [[nodiscard]] const CompoundStatement *get_body() const {
+            return cast<CompoundStatement>(nodes[BODY].get());
         }
 
         [[nodiscard]] const unique_ptr<Node> *begin() const override {
