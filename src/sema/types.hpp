@@ -120,6 +120,7 @@ public:
 };
 
 struct ArrayType : Type {
+    static constexpr size_t UNKNOWN_SIZE = 0;
     QualType element_type;
     size_t num_elements;
 
@@ -140,7 +141,7 @@ struct FunctionType : Type {
     std::vector<QualType> argument_types;
 
 private:
-    FunctionType() : Type(Function) {
+    FunctionType(QualType returnType, const std::vector<QualType> &arguments) : Type(Function), return_type(returnType), argument_types(arguments) {
     }
 
 public:

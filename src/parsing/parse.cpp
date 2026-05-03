@@ -314,7 +314,8 @@ unique_ptr<AST::ParameterList> Parser::parse_parameter_list() {
 unique_ptr<AST::Parameter> Parser::parse_parameter() {
     unique_ptr<AST::Node> specQual = parse_decl_specifiers();
     unique_ptr<AST::Node> declarator = nullptr;
-    if (lexer.peek().type() != TokenType::Comma) {
+    TokenType type = lexer.peek().type();
+    if (type != TokenType::Comma && type != TokenType::RParen) {
         declarator = parse_declarator(true);
     }
     return AST::Parameter::create(std::move(specQual), std::move(declarator));

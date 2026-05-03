@@ -273,6 +273,25 @@ bool Sema::is_rvalue(const Expression *expression) {
     return false;
 }
 
+bool Sema::is_constant_expression(const Expression *expression) {
+    if (isa<Constant, SizeofType>(expression)) {
+        return true;
+    }
+
+    if (auto *binOp = dyn_cast<BinOp>(expression)) {
+        return is_constant_expression(binOp->get_lhs()) && is_constant_expression(binOp->get_rhs());
+    }
+
+    if (auto *unaryOp = dyn_cast<UnaryOp>(expression)) {
+        UnaryOp::Op op = unaryOp->get_operation();
+        if (op == UnaryOp::SIZEOF || op == UnaryOp::INVERT || op == UnaryOp::NEGATE || op == UnaryOp::POSITIVE || op == UnaryOp::NEGATIVE) {
+            return is_constant_expression(unaryOp->get_rhs());
+        }
+    }
+
+    return false;
+}
+
 bool Sema::are_implicitly_convertable(const Type *left, const Type *right) {
     // TODO: Make better compatibility test
     if (left->type == right->type) {

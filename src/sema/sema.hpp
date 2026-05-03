@@ -84,7 +84,10 @@ private:
     StructType *accept_struct_decl(StructDeclList *declList);
 
     SymbolTable::Entry accept_init_declarator(InitDeclarator *initDeclarator, QualType type);
-    SymbolTable::Entry accept_declarator(Declarator *declarator, QualType type);
+    SymbolTable::Entry accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract);
+    QualType accept_index_declarator(IndexDeclarator *indexDeclarator, QualType type, bool inFunctionDef);
+    QualType accept_parameterized_declarator(ParameterizedDeclarator *parameterizedDeclarator, QualType returnType);
+
     void accept_function_decl(FunctionDecl *functionDecl);
     void accept_compound_statement(CompoundStatement *compound_statement);
     void accept_statement(Statement *statement);
@@ -115,6 +118,8 @@ private:
 public:
     static bool is_lvalue(const Expression *expression);
     static bool is_rvalue(const Expression *expression);
+
+    static bool is_constant_expression(const Expression *expression);
 
     // Type Comparisons
     static bool are_implicitly_convertable(const Type *left, const Type *right);

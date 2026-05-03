@@ -26,7 +26,8 @@ void Sema::accept_ast(Node *ast) {
                     } else if (isa<FunctionDecl>(node)) {
                         accept_function_decl(cast<FunctionDecl>(node.get()));
                     } else {
-                        throw std::runtime_error("Translation units must only contain declarations and function declarations.");
+                        throw std::runtime_error(
+                            "Translation units must only contain declarations and function declarations.");
                     }
                 } catch (...) {
                     std::stringstream s;
@@ -67,7 +68,8 @@ void Sema::accept_decl(Decl *decl) {
     }
 }
 
-PrimitiveType convertFromTypeSpec(const TypeSpecifier::TypeSpecifierType type, const bool isSigned, const bool signMarked) {
+PrimitiveType convertFromTypeSpec(const TypeSpecifier::TypeSpecifierType type, const bool isSigned,
+                                  const bool signMarked) {
     switch (type) {
         case TypeSpecifier::VOID:
             return Void;
@@ -194,7 +196,7 @@ StructType *Sema::accept_struct_decl(StructDeclList *declList) {
 
         auto entryParams = accept_decl_specifiers(cast<DeclSpecifiers>(structDecl->get_spec_qual()));
         auto *declarator = cast<Declarator>(structDecl->get_declarator());
-        SymbolTable::Entry member = accept_declarator(declarator, entryParams);
+        SymbolTable::Entry member = accept_declarator(declarator, entryParams, false);
 
         if (members.contains(member.identifier)) {
             throw std::runtime_error("Redefinition of struct member \"" + member.identifier + "\"");
@@ -208,7 +210,7 @@ StructType *Sema::accept_struct_decl(StructDeclList *declList) {
 
 SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, const QualType type) {
     auto *declarator = cast<Declarator>(initDeclarator->get_declarator());
-    SymbolTable::Entry entry = accept_declarator(declarator, type);
+    SymbolTable::Entry entry = accept_declarator(declarator, type, false);
     if (initDeclarator->has_initializer()) {
         auto *initExpr = cast<Expression>(initDeclarator->get_initializer());
         auto assignmentType = accept_expression(initExpr);
@@ -219,30 +221,79 @@ SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, 
     return entry;
 }
 
-// Assume declarator is not abstract
-SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type) {
-    assert(!declarator->is_abstract());
+SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract) {
     SymbolTable::Entry entry = {.type = type};
-    auto *directDeclarator = declarator->get_direct_declarator();
-    if (isa<DirectDeclarator>(directDeclarator)) {
-        entry.identifier = cast<DirectDeclarator>(directDeclarator)->get_identifier();
-    } else {
-        assert(isa<Declarator>(directDeclarator));
-        entry = accept_declarator(cast<Declarator>(directDeclarator), type);
-    }
 
     if (declarator->has_pointer()) {
         auto *pointer = cast<AST::Pointer>(declarator->get_pointer());
         do {
-            type = {.type = PointerType::get(*this, type), .is_const = pointer->is_const()};
+            entry.type = {.type = PointerType::get(*this, entry.type), .is_const = pointer->is_const()};
             pointer = pointer->get_next_pointer();
         } while (pointer != nullptr);
-        entry.type = type;
     }
 
     // TODO: Handle suffixes
+    if (declarator->has_suffix()) {
+        auto *suffix = declarator->get_suffix();
+        do {
+            if (auto *indexDeclarator = dyn_cast<IndexDeclarator>(suffix)) {
+                entry.type = accept_index_declarator(indexDeclarator, entry.type, couldBeAbstract);
+                suffix = indexDeclarator->get_next_suffix();
+            } else if (auto *parameterizedDeclarator = dyn_cast<ParameterizedDeclarator>(suffix)) {
+                entry.type = accept_parameterized_declarator(parameterizedDeclarator, entry.type);
+                suffix = parameterizedDeclarator->get_next_suffix();
+            } else {
+                throw std::runtime_error("Unknown suffix type");
+            }
+        } while (suffix != nullptr);
+    }
+
+    if (declarator->is_abstract()) {
+        if (!couldBeAbstract) {
+            throw std::runtime_error("Non abstract declarator must have an identifier");
+        }
+    } else {
+        auto *directDeclarator = declarator->get_direct_declarator();
+        if (isa<DirectDeclarator>(directDeclarator)) {
+            entry.identifier = cast<DirectDeclarator>(directDeclarator)->get_identifier();
+        } else {
+            assert(isa<Declarator>(directDeclarator));
+            entry = accept_declarator(cast<Declarator>(directDeclarator), entry.type, couldBeAbstract);
+        }
+    }
 
     return entry;
+}
+
+QualType Sema::accept_index_declarator(IndexDeclarator *indexDeclarator, QualType type, bool inFunctionDef) {
+    if (!indexDeclarator->has_expression()) {
+        if (!inFunctionDef) {
+            throw std::runtime_error("Array declaration must provide a size");
+        }
+        return {ArrayType::get(*this, type, ArrayType::UNKNOWN_SIZE), type.is_const};
+    }
+    auto *constExpr = indexDeclarator->get_expression();
+    QualType constExprType = accept_expression(constExpr);
+    if (!is_constant_expression(constExpr)) {
+        throw std::runtime_error("Cannot declare array of variable size");
+    }
+    // TODO: Handle constant size check
+    return {ArrayType::get(*this, type, 0), type.is_const};
+}
+
+QualType Sema::accept_parameterized_declarator(ParameterizedDeclarator *parameterizedDeclarator, QualType returnType) {
+    auto *parameterList = parameterizedDeclarator->get_parameter_list();
+    std::vector<QualType> parameterTypes;
+    for (auto &node: *parameterList) {
+        auto *parameter = cast<Parameter>(node.get());
+        QualType parameterType = accept_decl_specifiers(parameter->get_decl_specs());
+        if (parameter->has_declarator()) {
+            SymbolTable::Entry entry = accept_declarator(parameter->get_declarator(), parameterType, true);
+            parameterType = entry.type;
+        }
+        parameterTypes.push_back(parameterType);
+    }
+    return {FunctionType::get(*this, returnType, parameterTypes), returnType.is_const};
 }
 
 void Sema::accept_function_decl(FunctionDecl *functionDecl) {
@@ -250,7 +301,7 @@ void Sema::accept_function_decl(FunctionDecl *functionDecl) {
     auto *declarator = functionDecl->get_declarator();
 
     const auto entryPrototype = accept_decl_specifiers(declSpecs);
-    const auto entry = accept_declarator(declarator, entryPrototype);
+    const auto entry = accept_declarator(declarator, entryPrototype, false);
     local_table->addSymbol(entry);
 
     auto body = functionDecl->get_body();

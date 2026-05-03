@@ -745,9 +745,27 @@ namespace AST {
         enum {CONSTANT_EXPRESSION, NEXT_SUFFIX};
         unique_ptr<Node> nodes[2];
         bool hasNext = false;
+        bool hasExpression = false;
 
     public:
         IndexDeclarator() : Node(NK_IndexDeclarator) {}
+
+        [[nodiscard]] bool has_expression() const {
+            return hasExpression;
+        }
+
+        [[nodiscard]] Expression *get_expression() const {
+            return cast<Expression>(nodes[CONSTANT_EXPRESSION].get());
+        }
+
+        [[nodiscard]] bool has_next_suffix() const {
+            return hasNext;
+        }
+
+        [[nodiscard]] Node *get_next_suffix() const {
+            return nodes[NEXT_SUFFIX].get();
+        }
+
         unique_ptr<Node> *begin() override {
             return nodes;
         }
@@ -767,6 +785,7 @@ namespace AST {
         static unique_ptr<IndexDeclarator> create(unique_ptr<Node> constantExpression, unique_ptr<Node> suffix) {
             auto base = std::make_unique<IndexDeclarator>();
             base->hasNext = suffix != nullptr;
+            base->hasExpression = constantExpression != nullptr;
             base->nodes[CONSTANT_EXPRESSION] = std::move(constantExpression);
             base->nodes[NEXT_SUFFIX] = std::move(suffix);
             return base;
@@ -782,6 +801,8 @@ namespace AST {
         }
     };
 
+    class ParameterList;
+
     class ParameterizedDeclarator : public Node {
         enum {PARAMETER_LIST, NEXT_SUFFIX};
         unique_ptr<Node> nodes[2];
@@ -789,6 +810,19 @@ namespace AST {
 
     public:
         ParameterizedDeclarator() : Node(NK_ParameterizedDeclarator) {}
+
+        [[nodiscard]] ParameterList *get_parameter_list() const {
+            return cast<ParameterList>(nodes[PARAMETER_LIST].get());
+        }
+
+        [[nodiscard]] bool has_next_suffix() const {
+            return hasNext;
+        }
+
+        [[nodiscard]] Node *get_next_suffix() const {
+            return nodes[NEXT_SUFFIX].get();
+        }
+
         unique_ptr<Node> *begin() override {
             return nodes;
         }
@@ -871,9 +905,22 @@ namespace AST {
     class Parameter : public Node {
         enum {SPEC_QUALS, DECLARATOR};
         unique_ptr<Node> nodes[2];
-        bool has_declarator = false;
+        bool hasDeclarator = false;
     public:
         Parameter() : Node(NK_Parameter) {}
+
+        [[nodiscard]] DeclSpecifiers* get_decl_specs() const {
+            return cast<DeclSpecifiers>(nodes[SPEC_QUALS].get());
+        }
+
+        [[nodiscard]] bool has_declarator() const {
+            return hasDeclarator;
+        }
+
+        [[nodiscard]] Declarator *get_declarator() const {
+            return cast<Declarator>(nodes[DECLARATOR].get());
+        }
+
         unique_ptr<Node> *begin() override {
             return nodes;
         }
@@ -896,7 +943,7 @@ namespace AST {
 
         static unique_ptr<Parameter> create(unique_ptr<Node> specQuals, unique_ptr<Node> declarator) {
             auto base = std::make_unique<Parameter>();
-            base->has_declarator = declarator != nullptr;
+            base->hasDeclarator = declarator != nullptr;
             base->nodes[SPEC_QUALS] = std::move(specQuals);
             base->nodes[DECLARATOR] = std::move(declarator);
             return base;
