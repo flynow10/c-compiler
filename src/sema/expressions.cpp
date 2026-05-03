@@ -170,8 +170,8 @@ QualType Sema::accept_member_access(MemberAccess *memberAccess) {
     if (!structType->members.contains(memberId)) {
         throw SemaAnalysis::ExprException(memberAccess, "Member does not exist on struct");
     }
-    auto &[memberType, memberConst] = structType->members.at(memberId);
-    return {memberType, rhsType.is_const || memberConst};
+    auto memberType = structType->members.at(memberId);
+    return {memberType.type, rhsType.is_const || memberType.is_const};
 }
 
 QualType Sema::accept_identifier(Identifier *identifier) {

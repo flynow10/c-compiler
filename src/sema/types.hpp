@@ -136,16 +136,26 @@ public:
     }
 };
 
+struct FunctionArg {
+    QualType type;
+    bool is_named;
+    std::string identifier;
+
+    FunctionArg(const QualType type) : type(type), is_named(false) {}
+    FunctionArg(const QualType type, std::string identifier) : type(type), is_named(true), identifier(std::move(identifier)) {}
+};
+
 struct FunctionType : Type {
+    using ArgList = std::vector<FunctionArg>;
     QualType return_type;
-    std::vector<QualType> argument_types;
+    ArgList argument_types;
 
 private:
-    FunctionType(QualType returnType, const std::vector<QualType> &arguments) : Type(Function), return_type(returnType), argument_types(arguments) {
+    FunctionType(const QualType &returnType, ArgList arguments) : Type(Function), return_type(returnType), argument_types(std::move(arguments)) {
     }
 
 public:
-    static FunctionType *get(Sema &ctx, QualType return_type, std::vector<QualType> &argument_types);
+    static FunctionType *get(Sema &ctx, const QualType &return_type, const ArgList &argument_types);
 
     static bool classof(const Type *type) {
         return type->type == Function;
@@ -196,6 +206,18 @@ struct std::hash<ArrayType> {
     std::size_t operator()(ArrayType const &arrayType) const noexcept {
         size_t result = 0;
         hash_combine(result, arrayType.element_type, arrayType.num_elements);
+        return result;
+    }
+};
+
+template<>
+struct std::hash<FunctionArg> {
+    std::size_t operator()(FunctionArg const &functionArg) const noexcept {
+        size_t result = 0;
+        hash_combine(result, functionArg.type);
+        if (functionArg.is_named) {
+            hash_combine(result, functionArg.identifier);
+        }
         return result;
     }
 };

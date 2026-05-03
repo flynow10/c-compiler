@@ -1164,6 +1164,9 @@ namespace AST {
         enum { SPEC_QUALS, DECLARATOR, BODY };
         unique_ptr<Node> nodes[3];
 
+        // Semantic Analysis
+        std::shared_ptr<SymbolTable> symbolTable;
+
     public:
         FunctionDecl() : Node(NK_FunctionDecl) {}
         [[nodiscard]] DeclSpecifiers *get_spec_quals() const {
@@ -1176,6 +1179,19 @@ namespace AST {
 
         [[nodiscard]] CompoundStatement *get_body() const {
             return cast<CompoundStatement>(nodes[BODY].get());
+        }
+
+
+        void set_symbol_table(std::shared_ptr<SymbolTable> newTable) {
+            symbolTable = std::move(newTable);
+        }
+
+        std::shared_ptr<SymbolTable> &get_symbol_table() {
+            return symbolTable;
+        }
+
+        [[nodiscard]] SymbolTable *get_symbol_table_raw() const {
+            return symbolTable.get();
         }
 
         unique_ptr<Node> *begin() override {

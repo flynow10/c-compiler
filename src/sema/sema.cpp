@@ -227,7 +227,7 @@ SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type
     if (declarator->has_pointer()) {
         auto *pointer = cast<AST::Pointer>(declarator->get_pointer());
         do {
-            entry.type = {.type = PointerType::get(*this, entry.type), .is_const = pointer->is_const()};
+            entry.type = {PointerType::get(*this, entry.type), pointer->is_const()};
             pointer = pointer->get_next_pointer();
         } while (pointer != nullptr);
     }
@@ -283,15 +283,16 @@ QualType Sema::accept_index_declarator(IndexDeclarator *indexDeclarator, QualTyp
 
 QualType Sema::accept_parameterized_declarator(ParameterizedDeclarator *parameterizedDeclarator, QualType returnType) {
     auto *parameterList = parameterizedDeclarator->get_parameter_list();
-    std::vector<QualType> parameterTypes;
+    FunctionType::ArgList parameterTypes;
     for (auto &node: *parameterList) {
         auto *parameter = cast<Parameter>(node.get());
         QualType parameterType = accept_decl_specifiers(parameter->get_decl_specs());
         if (parameter->has_declarator()) {
             SymbolTable::Entry entry = accept_declarator(parameter->get_declarator(), parameterType, true);
-            parameterType = entry.type;
+            parameterTypes.emplace_back(entry.type, entry.identifier);
+        } else {
+            parameterTypes.emplace_back(parameterType);
         }
-        parameterTypes.push_back(parameterType);
     }
     return {FunctionType::get(*this, returnType, parameterTypes), returnType.is_const};
 }
@@ -302,10 +303,29 @@ void Sema::accept_function_decl(FunctionDecl *functionDecl) {
 
     const auto entryPrototype = accept_decl_specifiers(declSpecs);
     const auto entry = accept_declarator(declarator, entryPrototype, false);
-    local_table->addSymbol(entry);
+
+    function_declaration_ptr = global_table->addSymbol(entry);
+
+    // Add intermediate symbol table to contain function arguments
+    // This is functionally the same as adding the arguments to the compound statement table
+    functionDecl->set_symbol_table(std::make_shared<SymbolTable>(local_table));
+    local_table = functionDecl->get_symbol_table_raw();
+
+    if (!isa<FunctionType>(entry.type.type)) {
+        throw std::runtime_error("Function declaration must declare a function type");
+    }
+    auto *functionType = cast<FunctionType>(function_declaration_ptr->type.type);
+    for (const auto & argument : functionType->argument_types) {
+        if (!argument.is_named) {
+            throw std::runtime_error("Function declaration must declare a named argument");
+        }
+        std::string argumentName = argument.identifier;
+        local_table->addSymbol(argumentName, argument.type);
+    }
 
     auto body = functionDecl->get_body();
     accept_compound_statement(body);
+    function_declaration_ptr = nullptr;
 }
 
 void Sema::accept_compound_statement(CompoundStatement *compound_statement) {

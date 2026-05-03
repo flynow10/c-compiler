@@ -77,7 +77,7 @@ ArrayType * ArrayType::get(Sema &ctx, QualType elementType, size_t num_elements)
     return &ctx.array_types.emplace(hash, aType).first->second;
 }
 
-FunctionType * FunctionType::get(Sema &ctx, QualType return_type, std::vector<QualType> &argument_types) {
+FunctionType * FunctionType::get(Sema &ctx, const QualType &return_type, const ArgList &argument_types) {
     FunctionType fType{return_type, argument_types};
     size_t hash = std::hash<FunctionType>{}(fType);
     if (const auto type = ctx.function_types.find(hash); type != ctx.function_types.end()) {

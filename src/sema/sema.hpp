@@ -69,6 +69,7 @@ public:
     std::map<HashValue, FunctionType> function_types;
     SymbolTable *global_table = nullptr;
     SymbolTable *local_table = nullptr;
+    SymbolTable::Entry *function_declaration_ptr = nullptr;
 
     // ---------
     // Acceptors
