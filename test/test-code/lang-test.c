@@ -1,4 +1,5 @@
 int main(int argc, char* argv[]) {
-    argc = 3;
-    return 'a';
+    int a = 7;
+    int b = 3;
+    return a + b;
 }

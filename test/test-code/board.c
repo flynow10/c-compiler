@@ -25,6 +25,10 @@ struct Coordinate indexToCoord(const int index) {
     return coord;
 }
 
+int coordToIndex(const struct Coordinate coord) {
+    return coord.rank * 8 + coord.file;
+}
+
 struct Board *createBoard() {
     struct Board *board = (struct Board *)malloc(sizeof(struct Board));
     board->squares[0][0] = 0x1 << 2;
@@ -50,4 +54,25 @@ void makeMove(struct Board *board, struct Move *move) {
     int piece = board->squares[startCoord.rank][startCoord.file];
     board->squares[startCoord.rank][startCoord.file] = 0;
     board->squares[endCoord.rank][endCoord.file] = piece;
+}
+
+struct Move *generateMoves(struct Board *board) {
+    struct Move *moveList = createMove(0, 0, 0);
+    struct Move *next = moveList;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            if (board->squares[i][j] == 0) {
+                struct Coordinate startSquare = {i, j}, targetSquare = {i, j + 1};
+                struct Move *newMove = createMove(coordToIndex(startSquare), coordToIndex(targetSquare), 0);
+                next->next = newMove;
+                next = newMove;
+            }
+        }
+    }
+    for (int i = 0; i < 8; ++i) {
+        struct Move *newMove = createMove(0, i, 0);
+        next->next = newMove;
+        next = newMove;
+    }
+    return moveList;
 }
