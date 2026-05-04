@@ -15,7 +15,7 @@
 
 class Sema;
 
-enum PrimitiveType {
+enum class PrimitiveType {
     Void,
     Char,
     Long,
@@ -33,8 +33,10 @@ enum PrimitiveType {
     Function,
 };
 
+std::string to_string(PrimitiveType type);
+
 struct Type {
-    PrimitiveType type = Void;
+    PrimitiveType type = PrimitiveType::Void;
 
 protected:
     friend Sema;
@@ -42,6 +44,8 @@ protected:
     }
 
 public:
+    virtual ~Type() = default;
+
     [[nodiscard]] bool is_void_type() const;
 
     [[nodiscard]] bool is_integer() const;
@@ -55,6 +59,8 @@ public:
     [[nodiscard]] bool is_function() const;
 
     [[nodiscard]] bool is_array() const;
+
+    [[nodiscard]] virtual std::string to_string() const;
 
     static bool classof(const Type *type) {
         return true;
@@ -81,6 +87,8 @@ struct QualType {
 
     [[nodiscard]] bool is_array() const { return type->is_array(); }
 
+    [[nodiscard]] std::string to_string() const { return type->to_string(); }
+
     bool operator==(const QualType &other) const {
         if (this->type != nullptr && this->type == other.type && this->is_const == other.is_const) {
             return true;
@@ -93,6 +101,8 @@ struct IntegerType : Type {
     explicit IntegerType(PrimitiveType type) : Type(type) {
     }
 
+    std::string to_string() const override;
+
     static IntegerType *get(Sema &ctx, PrimitiveType type);
 
     static bool classof(const Type *type) {
@@ -104,14 +114,16 @@ struct PointerType : Type {
     QualType pointed_type;
 
 private:
-    PointerType(const QualType pointedType) : Type(Pointer), pointed_type(pointedType) {
+    PointerType(const QualType pointedType) : Type(PrimitiveType::Pointer), pointed_type(pointedType) {
     }
 
 public:
     static PointerType *get(Sema &ctx, QualType type);
 
+    std::string to_string() const override;
+
     static bool classof(const Type *type) {
-        return type->type == Pointer;
+        return type->type == PrimitiveType::Pointer;
     }
 };
 
@@ -121,15 +133,17 @@ struct StructType : Type {
     MemberMap members;
 
 private:
-    StructType(MemberMap members) : Type(Struct), members(std::move(members)) {
+    StructType(MemberMap members) : Type(PrimitiveType::Struct), members(std::move(members)) {
     }
 
 public:
+    std::string to_string() const override;
+
     static StructType *get(Sema &ctx, const MemberMap &members);
     static StructType *convert(Sema &ctx, Type *structOrRef);
 
     static bool classof(const Type *type) {
-        return type->type == Struct;
+        return type->type == PrimitiveType::Struct;
     }
 };
 
@@ -137,15 +151,17 @@ struct StructRefType : Type {
     std::string identifier;
 
 private:
-    StructRefType(std::string identifier) : Type(StructRef), identifier(std::move(identifier)) {}
+    StructRefType(std::string identifier) : Type(PrimitiveType::StructRef), identifier(std::move(identifier)) {}
 
 public:
     StructType *get_complete_type(Sema& ctx) const;
 
+    std::string to_string() const override;
+
     static StructRefType *get(Sema& ctx, const std::string &identifier);
 
     static bool classof(const Type *type) {
-        return type->type == StructRef;
+        return type->type == PrimitiveType::StructRef;
     }
 };
 
@@ -155,14 +171,16 @@ struct ArrayType : Type {
     size_t num_elements;
 
 private:
-    ArrayType(QualType elementType, size_t numElements) : Type(Array), element_type(elementType),
+    ArrayType(QualType elementType, size_t numElements) : Type(PrimitiveType::Array), element_type(elementType),
                                                           num_elements(numElements) {}
 
 public:
+    std::string to_string() const override;
+
     static ArrayType *get(Sema &ctx, QualType elementType, size_t num_elements);
 
     static bool classof(const Type *type) {
-        return type->type == Array;
+        return type->type == PrimitiveType::Array;
     }
 };
 
@@ -173,6 +191,8 @@ struct FunctionArg {
 
     FunctionArg(const QualType type) : type(type), is_named(false) {}
     FunctionArg(const QualType type, std::string identifier) : type(type), is_named(true), identifier(std::move(identifier)) {}
+
+    std::string to_string() const;
 };
 
 struct FunctionType : Type {
@@ -181,14 +201,16 @@ struct FunctionType : Type {
     ArgList argument_types;
 
 private:
-    FunctionType(const QualType &returnType, ArgList arguments) : Type(Function), return_type(returnType), argument_types(std::move(arguments)) {
+    FunctionType(const QualType &returnType, ArgList arguments) : Type(PrimitiveType::Function), return_type(returnType), argument_types(std::move(arguments)) {
     }
 
 public:
+    std::string to_string() const override;
+
     static FunctionType *get(Sema &ctx, const QualType &return_type, const ArgList &argument_types);
 
     static bool classof(const Type *type) {
-        return type->type == Function;
+        return type->type == PrimitiveType::Function;
     }
 };
 
@@ -206,7 +228,7 @@ struct std::hash<QualType> {
 template<>
 struct std::hash<IntegerType> {
     std::size_t operator()(IntegerType const &type) const noexcept {
-        return std::hash<int>{}(type.type);
+        return std::hash<PrimitiveType>{}(type.type);
     }
 };
 
@@ -254,6 +276,7 @@ struct std::hash<FunctionArg> {
     std::size_t operator()(FunctionArg const &functionArg) const noexcept {
         size_t result = 0;
         hash_combine(result, functionArg.type);
+        // TODO: Identifier should not be considered in hash since it prevents comparison between equivalent function types
         if (functionArg.is_named) {
             hash_combine(result, functionArg.identifier);
         }

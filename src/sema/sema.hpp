@@ -4,6 +4,7 @@
 
 #ifndef SEMA_HPP
 #define SEMA_HPP
+#include <iostream>
 #include <list>
 #include <map>
 
@@ -72,7 +73,7 @@ public:
 class Sema {
 public:
     using HashValue = std::size_t;
-    Type void_type = Type(Void);
+    Type void_type = Type(PrimitiveType::Void);
     std::map<HashValue, IntegerType> integer_types;
     std::map<HashValue, PointerType> pointer_types;
     std::map<HashValue, StructType> struct_types;
@@ -147,7 +148,22 @@ public:
     static bool is_pointer_to_function(const Type *type);
 
     QualType convert_array_to_pointer(QualType type, const Expression *parentExpression);
+
+
+    // Debug
+    void print_debug_info();
+private:
+    template <typename T>
+    void print_table(const std::map<HashValue, T> &table);
 };
+
+template <typename T>
+inline void Sema::print_table(const std::map<HashValue, T> &table) {
+    std::cout << "Table ------" << std::endl;
+    for (auto value : table) {
+        std::cout << value.first << ": " << value.second.to_string() << std::endl;
+    }
+}
 
 
 #endif //SEMA_HPP

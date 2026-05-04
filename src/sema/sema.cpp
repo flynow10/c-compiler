@@ -46,12 +46,12 @@ void Sema::accept_ast(Node *ast) {
 }
 
 const std::unordered_map<TypeSpecifier::TypeSpecifierType, PrimitiveType> TypeSpecMap = {
-    {TypeSpecifier::LONG, Long},
-    {TypeSpecifier::INT, Int},
-    {TypeSpecifier::SHORT, Short},
-    {TypeSpecifier::CHAR, SignedChar},
-    {TypeSpecifier::STRUCT, Struct},
-    {TypeSpecifier::VOID, Void},
+    {TypeSpecifier::LONG, PrimitiveType::Long},
+    {TypeSpecifier::INT, PrimitiveType::Int},
+    {TypeSpecifier::SHORT, PrimitiveType::Short},
+    {TypeSpecifier::CHAR, PrimitiveType::SignedChar},
+    {TypeSpecifier::STRUCT, PrimitiveType::Struct},
+    {TypeSpecifier::VOID, PrimitiveType::Void},
 };
 
 void Sema::accept_decl(Decl *decl) {
@@ -72,25 +72,25 @@ PrimitiveType convertFromTypeSpec(const TypeSpecifier::TypeSpecifierType type, c
                                   const bool signMarked) {
     switch (type) {
         case TypeSpecifier::VOID:
-            return Void;
+            return PrimitiveType::Void;
         case TypeSpecifier::CHAR:
             if (isSigned)
-                return signMarked ? SignedChar : Char;
-            return UnsignedChar;
+                return signMarked ? PrimitiveType::SignedChar : PrimitiveType::Char;
+            return PrimitiveType::UnsignedChar;
         case TypeSpecifier::SHORT:
             if (isSigned)
-                return Short;
-            return UnsignedShort;
+                return PrimitiveType::Short;
+            return PrimitiveType::UnsignedShort;
         case TypeSpecifier::INT:
             if (isSigned)
-                return Int;
-            return UnsignedInt;
+                return PrimitiveType::Int;
+            return PrimitiveType::UnsignedInt;
         case TypeSpecifier::LONG:
             if (isSigned)
-                return Long;
-            return UnsignedLong;
+                return PrimitiveType::Long;
+            return PrimitiveType::UnsignedLong;
         case TypeSpecifier::STRUCT:
-            return Struct;
+            return PrimitiveType::Struct;
         default:
             throw std::runtime_error("Unexpected type specifier type");
     }
@@ -146,7 +146,7 @@ QualType Sema::accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeFo
         throw std::runtime_error("At least one type specifier must be included in a declaration");
     }
 
-    if (signMarked && (sType == Struct || sType == Void)) {
+    if (signMarked && (sType == TypeSpecifier::STRUCT || sType == TypeSpecifier::VOID)) {
         throw std::runtime_error("Only integer types can be marked as signed or unsigned");
     }
 
@@ -490,4 +490,13 @@ void Sema::accept_control_statement(ControlStatement *controlStatement) {
             throw std::runtime_error("Return expression does not match the functions declared return type");
         }
     }
+}
+
+void Sema::print_debug_info() {
+    print_table(integer_types);
+    print_table(pointer_types);
+    print_table(struct_types);
+    print_table(struct_ref_types);
+    print_table(array_types);
+    print_table(function_types);
 }

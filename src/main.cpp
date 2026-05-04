@@ -65,6 +65,8 @@ int main(const int argc, char *argv[]) {
     Sema sema;
     sema.accept_ast(ast.get());
 
+    // sema.print_debug_info();
+
     if (options.outFile.empty()) {
         std::cout << ast << std::endl;
     } else {

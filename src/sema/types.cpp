@@ -3,22 +3,48 @@
 //
 #include "types.hpp"
 
+#include <sstream>
+
 #include "sema.hpp"
 
 bool is_integer_type(PrimitiveType type) {
-    return type == Char ||
-           type == Long ||
-           type == Int ||
-           type == Short ||
-           type == SignedChar ||
-           type == UnsignedLong ||
-           type == UnsignedInt ||
-           type == UnsignedShort ||
-           type == UnsignedChar;
+    return type == PrimitiveType::Char ||
+           type == PrimitiveType::Long ||
+           type == PrimitiveType::Int ||
+           type == PrimitiveType::Short ||
+           type == PrimitiveType::SignedChar ||
+           type == PrimitiveType::UnsignedLong ||
+           type == PrimitiveType::UnsignedInt ||
+           type == PrimitiveType::UnsignedShort ||
+           type == PrimitiveType::UnsignedChar;
+}
+
+std::string primitive_to_string(PrimitiveType type) {
+    static const auto strings = [] {
+        std::map<PrimitiveType,std::string> result;
+#define INSERT_ELEMENT(p) result.emplace(p, #p);
+        INSERT_ELEMENT(PrimitiveType::Void)
+        INSERT_ELEMENT(PrimitiveType::Char)
+        INSERT_ELEMENT(PrimitiveType::Long)
+        INSERT_ELEMENT(PrimitiveType::Int)
+        INSERT_ELEMENT(PrimitiveType::Short)
+        INSERT_ELEMENT(PrimitiveType::SignedChar)
+        INSERT_ELEMENT(PrimitiveType::UnsignedLong)
+        INSERT_ELEMENT(PrimitiveType::UnsignedInt)
+        INSERT_ELEMENT(PrimitiveType::UnsignedShort)
+        INSERT_ELEMENT(PrimitiveType::UnsignedChar)
+        INSERT_ELEMENT(PrimitiveType::Struct)
+        INSERT_ELEMENT(PrimitiveType::StructRef)
+        INSERT_ELEMENT(PrimitiveType::Array)
+        INSERT_ELEMENT(PrimitiveType::Pointer)
+        INSERT_ELEMENT(PrimitiveType::Function)
+        return result;
+    }();
+    return strings.at(type);
 }
 
 bool Type::is_void_type() const {
-    return type == Void;
+    return type == PrimitiveType::Void;
 }
 
 bool Type::is_integer() const {
@@ -26,7 +52,7 @@ bool Type::is_integer() const {
 }
 
 bool Type::is_signed() const {
-    return type == SignedChar || type == Short || type == Int || type == Long;
+    return type == PrimitiveType::SignedChar || type == PrimitiveType::Short || type == PrimitiveType::Int || type == PrimitiveType::Long;
 }
 
 bool Type::is_pointer() const {
@@ -34,19 +60,25 @@ bool Type::is_pointer() const {
 }
 
 bool Type::is_struct() const {
-    return type == Struct || type == StructRef;
+    return type == PrimitiveType::Struct || type == PrimitiveType::StructRef;
 }
 
 bool Type::is_function() const {
-    return type == Function;
+    return type == PrimitiveType::Function;
 }
 
 bool Type::is_array() const {
-    return type == Array;
+    return type == PrimitiveType::Array;
+}
+
+std::string Type::to_string() const {
+    std::stringstream ss;
+    ss << "Type(" << primitive_to_string(this->type) << ")";
+    return ss.str();
 }
 
 Type * Type::get(Sema &ctx, PrimitiveType type) {
-    if (type == Void) {
+    if (type == PrimitiveType::Void) {
         return &ctx.void_type;
     }
     if (is_integer_type(type)) {
@@ -55,11 +87,19 @@ Type * Type::get(Sema &ctx, PrimitiveType type) {
     throw std::runtime_error("Cannot use Type::get with this primitive type");
 }
 
+std::string IntegerType::to_string() const {
+    std::stringstream ss;
+    ss << "IntegerType(" << primitive_to_string(type) << ")";
+    return ss.str();
+}
+
 IntegerType * IntegerType::get(Sema &ctx, PrimitiveType stype) {
-    if (const auto type = ctx.integer_types.find(stype); type != ctx.integer_types.end()) {
+    IntegerType iType{stype};
+    size_t hash = std::hash<IntegerType>{}(iType);
+    if (const auto type = ctx.integer_types.find(hash); type != ctx.integer_types.end()) {
         return &type->second;
     }
-    return &ctx.integer_types.emplace(stype, IntegerType(stype)).first->second;
+    return &ctx.integer_types.emplace(hash, iType).first->second;
 }
 
 PointerType * PointerType::get(Sema &ctx, QualType pointedType) {
@@ -69,6 +109,22 @@ PointerType * PointerType::get(Sema &ctx, QualType pointedType) {
         return &type->second;
     }
     return &ctx.pointer_types.emplace(hash, pType).first->second;
+}
+
+std::string PointerType::to_string() const {
+    std::stringstream ss;
+    ss << "PointerType(" << pointed_type.to_string() << ")";
+    return ss.str();
+}
+
+std::string StructType::to_string() const {
+    std::stringstream ss;
+    ss << "StructType(" << std::endl;
+    for (const auto &[memberName, type] : this->members) {
+        ss << memberName << ": " << type.to_string() << "," << std::endl;
+    }
+    ss << ")";
+    return ss.str();
 }
 
 StructType * StructType::get(Sema &ctx, const std::map<std::string, QualType> &members) {
@@ -101,6 +157,12 @@ StructType * StructRefType::get_complete_type(Sema &ctx) const {
     return cast<StructType>(type);
 }
 
+std::string StructRefType::to_string() const {
+    std::stringstream ss;
+    ss << "StructRefType(" << this->identifier << ")";
+    return ss.str();
+}
+
 StructRefType * StructRefType::get(Sema &ctx, const std::string &identifier) {
     StructRefType sType{identifier};
     size_t hash = std::hash<StructRefType>{}(sType);
@@ -110,6 +172,12 @@ StructRefType * StructRefType::get(Sema &ctx, const std::string &identifier) {
     return &ctx.struct_ref_types.emplace(hash, sType).first->second;
 }
 
+std::string ArrayType::to_string() const {
+    std::stringstream ss;
+    ss << "ArrayType(" << this->element_type.to_string() << ", " << this->num_elements << ")";
+    return ss.str();
+}
+
 ArrayType * ArrayType::get(Sema &ctx, QualType elementType, size_t num_elements) {
     ArrayType aType{elementType, num_elements};
     size_t hash = std::hash<ArrayType>{}(aType);
@@ -117,6 +185,26 @@ ArrayType * ArrayType::get(Sema &ctx, QualType elementType, size_t num_elements)
         return &type->second;
     }
     return &ctx.array_types.emplace(hash, aType).first->second;
+}
+
+std::string FunctionArg::to_string() const {
+    std::stringstream ss;
+    ss << "(" << type.to_string();
+    if (is_named) {
+        ss << " " << identifier;
+    }
+    ss << ")";
+    return ss.str();
+}
+
+std::string FunctionType::to_string() const {
+    std::stringstream ss;
+    ss << "FunctionType(" << this->return_type.to_string() << ",";
+    for (const auto & argument_type : this->argument_types) {
+        ss << argument_type.to_string() << ",";
+    }
+
+    return ss.str();
 }
 
 FunctionType * FunctionType::get(Sema &ctx, const QualType &return_type, const ArgList &argument_types) {

@@ -2240,11 +2240,11 @@ namespace AST {
         }
 
         unique_ptr<Node> *end() override {
-            return &returnExpression;
+            return &returnExpression + 1;
         }
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
-            return &returnExpression;
+            return &returnExpression + 1;
         }
 
         static unique_ptr<ControlStatement> create(const State state) {

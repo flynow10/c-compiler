@@ -109,7 +109,7 @@ QualType Sema::accept_unary_op(UnaryOp *unaryOp) {
     }
 
     if (operation == UnaryOp::SIZEOF) {
-        return {IntegerType::get(*this, UnsignedInt), true};
+        return {IntegerType::get(*this, PrimitiveType::UnsignedInt), true};
     }
 
     if (operation == UnaryOp::INCREMENT || operation == UnaryOp::DECREMENT) {
@@ -125,7 +125,7 @@ QualType Sema::accept_unary_op(UnaryOp *unaryOp) {
 }
 
 QualType Sema::accept_sizeof(SizeofType *type) {
-    return {IntegerType::get(*this, UnsignedInt), true};
+    return {IntegerType::get(*this, PrimitiveType::UnsignedInt), true};
 }
 
 QualType Sema::accept_index_expression(IndexExpression *indexExpression) {
@@ -212,14 +212,14 @@ QualType Sema::accept_identifier(Identifier *identifier) {
 QualType Sema::accept_constant(Constant *constant) {
     auto &constantValue = constant->get_value();
     if (constantValue.at(0) == '\'') {
-        return {IntegerType::get(*this, Char), true};
+        return {IntegerType::get(*this, PrimitiveType::Char), true};
     }
-    return {IntegerType::get(*this, Int), true};
+    return {IntegerType::get(*this, PrimitiveType::Int), true};
 }
 
 QualType Sema::accept_string_literal(StringLiteral *stringLiteral) {
     auto &stringValue = stringLiteral->get_value();
-    auto *charType = IntegerType::get(*this, Char);
+    auto *charType = IntegerType::get(*this, PrimitiveType::Char);
     auto *arrayType = ArrayType::get(*this, {charType, true}, stringValue.size());
     return {arrayType, true};
 }
@@ -233,18 +233,18 @@ constexpr Rank INTEGER_RANK = 3;
 
 Rank get_integer_rank(const PrimitiveType type) {
     switch (type) {
-        case Char:
-        case SignedChar:
-        case UnsignedChar:
+        case PrimitiveType::Char:
+        case PrimitiveType::SignedChar:
+        case PrimitiveType::UnsignedChar:
             return 1;
-        case Short:
-        case UnsignedShort:
+        case PrimitiveType::Short:
+        case PrimitiveType::UnsignedShort:
             return 2;
-        case Int:
-        case UnsignedInt:
+        case PrimitiveType::Int:
+        case PrimitiveType::UnsignedInt:
             return 3;
-        case Long:
-        case UnsignedLong:
+        case PrimitiveType::Long:
+        case PrimitiveType::UnsignedLong:
             return 4;
         default:
             throw std::runtime_error("Cannot find the rank of non integer types");
@@ -397,7 +397,7 @@ bool Sema::is_valid_bin_op(const Type *lType, const Type *rType, BinOp::Op opera
 
 Type *Sema::integer_promotion(Sema &ctx, Type *type) {
     if (Rank rank = get_integer_rank(type->type); rank < INTEGER_RANK) {
-        return IntegerType::get(ctx, Int);
+        return IntegerType::get(ctx, PrimitiveType::Int);
     }
     return type;
 }
