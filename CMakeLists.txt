@@ -25,6 +25,19 @@ add_executable(c_compiler src/main.cpp
         src/hash_combine.hpp
         src/sema/exceptions.cpp
         src/sema/exceptions.hpp
+        src/gen/riscv/riscv_target.cpp
+        src/gen/riscv/riscv_target.hpp
+        src/ir/block.cpp
+        src/ir/block.hpp
+        src/ir/instruction.cpp
+        src/ir/instruction.hpp
+        src/ir/function.cpp
+        src/ir/function.hpp
+        src/ir/ir_context.cpp
+        src/ir/ir_context.hpp
+        src/ir/global.cpp
+        src/ir/global.hpp
+        src/ir/types.hpp
 )
 add_executable(c_compiler_test test/main.cpp
         test/execute.cpp

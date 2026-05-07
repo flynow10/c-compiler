@@ -20,6 +20,7 @@ namespace AST {
     class Statement;
     class Expression;
     class CompoundStatement;
+    class InitDeclaratorList;
 
     using const_iterator = unique_ptr<Node> *;
 
@@ -221,8 +222,8 @@ namespace AST {
             return nodes[DECL_SPECS].get();
         }
 
-        [[nodiscard]] Node *get_declarators() const {
-            return nodes[DECLARATOR_LIST].get();
+        [[nodiscard]] InitDeclaratorList *get_declarators() const {
+            return cast<InitDeclaratorList>(nodes[DECLARATOR_LIST].get());
         }
 
         [[nodiscard]] unique_ptr<Node> *begin() override {

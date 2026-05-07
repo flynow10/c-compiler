@@ -91,6 +91,8 @@ public:
 private:
     void accept_decl(Decl *decl);
 
+    /// NOTE: If couldBeForwardDecl is true, this function still checks semantics, but returns
+    /// a void type instead
     QualType accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeForwardDecl);
 
     Type *accept_struct_specifier(StructSpecifier *specifier, bool couldBeForwardDecl);

@@ -7,10 +7,10 @@
 #include "../ASM_gen.hpp"
 
 
-class mips_target : ASM_gen {
+class mips_target : ASMGen {
 public:
     explicit mips_target(std::ostream &output)
-        : ASM_gen(output) {
+        : ASMGen(output) {
     }
 };
 

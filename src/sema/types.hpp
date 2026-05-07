@@ -60,6 +60,8 @@ public:
 
     [[nodiscard]] bool is_array() const;
 
+    [[nodiscard]] virtual size_t get_size() const;
+
     [[nodiscard]] virtual std::string to_string() const;
 
     static bool classof(const Type *type) {
@@ -86,6 +88,8 @@ struct QualType {
     [[nodiscard]] bool is_function() const { return type->is_function(); }
 
     [[nodiscard]] bool is_array() const { return type->is_array(); }
+
+    [[nodiscard]] size_t get_size() const { return type->get_size(); }
 
     [[nodiscard]] std::string to_string() const { return type->to_string(); }
 
@@ -120,6 +124,7 @@ private:
 public:
     static PointerType *get(Sema &ctx, QualType type);
 
+    size_t get_size() const override;
     std::string to_string() const override;
 
     static bool classof(const Type *type) {
@@ -142,6 +147,8 @@ public:
     static StructType *get(Sema &ctx, const MemberMap &members);
     static StructType *convert(Sema &ctx, Type *structOrRef);
 
+    size_t get_size() const override;
+
     static bool classof(const Type *type) {
         return type->type == PrimitiveType::Struct;
     }
@@ -157,6 +164,8 @@ public:
     StructType *get_complete_type(Sema& ctx) const;
 
     std::string to_string() const override;
+
+    size_t get_size() const override;
 
     static StructRefType *get(Sema& ctx, const std::string &identifier);
 
@@ -176,6 +185,8 @@ private:
 
 public:
     std::string to_string() const override;
+
+    size_t get_size() const override;
 
     static ArrayType *get(Sema &ctx, QualType elementType, size_t num_elements);
 

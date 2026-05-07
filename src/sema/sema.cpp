@@ -150,6 +150,10 @@ QualType Sema::accept_decl_specifiers(DeclSpecifiers *specifiers, bool couldBeFo
         throw std::runtime_error("Only integer types can be marked as signed or unsigned");
     }
 
+    if (couldBeForwardDecl) {
+        return {&void_type, true};
+    }
+
     if (type != nullptr) {
         return {type, isConst};
     }
@@ -297,6 +301,10 @@ SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type
             assert(isa<Declarator>(directDeclarator));
             entry = accept_declarator(cast<Declarator>(directDeclarator), entry.type, couldBeAbstract);
         }
+    }
+
+    if (isa<StructRefType>(entry.type.type)) {
+        throw std::runtime_error("Declarator base type must be complete");
     }
 
     return entry;

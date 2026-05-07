@@ -7,14 +7,17 @@
 #include <iosfwd>
 #include <ostream>
 
-class ASM_gen {
+#include "../parsing/ast.hpp"
+
+class ASMGen {
 protected:
     std::ostream& output;
 public:
-    explicit ASM_gen(std::ostream& output) : output(output) {
+    explicit ASMGen(std::ostream& output) : output(output) {
     }
 
-    virtual ~ASM_gen() = default;
+    virtual ~ASMGen() = default;
+    virtual void gen_ast(AST::TranslationUnit *translation_unit) = 0;
 };
 
 

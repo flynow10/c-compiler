@@ -3,6 +3,7 @@
 //
 #include "types.hpp"
 
+#include <ranges>
 #include <sstream>
 
 #include "sema.hpp"
@@ -71,6 +72,28 @@ bool Type::is_array() const {
     return type == PrimitiveType::Array;
 }
 
+size_t Type::get_size() const {
+    switch (type) {
+        case PrimitiveType::Void:
+            return 0;
+        case PrimitiveType::Char:
+        case PrimitiveType::SignedChar:
+        case PrimitiveType::UnsignedChar:
+            return 1;
+        case PrimitiveType::Short:
+        case PrimitiveType::UnsignedShort:
+            return 2;
+        case PrimitiveType::Int:
+        case PrimitiveType::UnsignedInt:
+            return 4;
+        case PrimitiveType::Long:
+        case PrimitiveType::UnsignedLong:
+            return 8;
+        default:
+            throw std::runtime_error{"Could not get size of type"};
+    }
+}
+
 std::string Type::to_string() const {
     std::stringstream ss;
     ss << "Type(" << primitive_to_string(this->type) << ")";
@@ -111,6 +134,10 @@ PointerType * PointerType::get(Sema &ctx, QualType pointedType) {
     return &ctx.pointer_types.emplace(hash, pType).first->second;
 }
 
+size_t PointerType::get_size() const {
+    return 4;
+}
+
 std::string PointerType::to_string() const {
     std::stringstream ss;
     ss << "PointerType(" << pointed_type.to_string() << ")";
@@ -147,6 +174,19 @@ StructType * StructType::convert(Sema &ctx, Type *structOrRef) {
     return type;
 }
 
+size_t StructType::get_size() const {
+    size_t size = 0;
+    size_t alignment = 0;
+    for (auto type: members | std::views::values) {
+        const size_t memberSize = type.get_size();
+        size += memberSize;
+        if (memberSize != 0 && memberSize < 4) {
+            alignment += 4 - memberSize;
+        }
+    }
+    return size + alignment;
+}
+
 StructType * StructRefType::get_complete_type(Sema &ctx) const {
     SymbolTable::Entry * entry = ctx.local_table->findStruct(this->identifier);
     if (!entry->is_complete) {
@@ -163,6 +203,10 @@ std::string StructRefType::to_string() const {
     return ss.str();
 }
 
+size_t StructRefType::get_size() const {
+    throw std::runtime_error("Cannot get size of reference to struct type");
+}
+
 StructRefType * StructRefType::get(Sema &ctx, const std::string &identifier) {
     StructRefType sType{identifier};
     size_t hash = std::hash<StructRefType>{}(sType);
@@ -176,6 +220,11 @@ std::string ArrayType::to_string() const {
     std::stringstream ss;
     ss << "ArrayType(" << this->element_type.to_string() << ", " << this->num_elements << ")";
     return ss.str();
+}
+
+size_t ArrayType::get_size() const {
+    size_t elementSize = element_type.get_size();
+    return elementSize * num_elements;
 }
 
 ArrayType * ArrayType::get(Sema &ctx, QualType elementType, size_t num_elements) {
