@@ -188,7 +188,7 @@ size_t StructType::get_size() const {
 }
 
 StructType * StructRefType::get_complete_type(Sema &ctx) const {
-    SymbolTable::Entry * entry = ctx.local_table->findStruct(this->identifier);
+    Entry * entry = ctx.local_table->findStruct(this->identifier);
     if (!entry->is_complete) {
         throw std::runtime_error("Couldn't find complete type of struct \"" + this->identifier + "\"");
     }

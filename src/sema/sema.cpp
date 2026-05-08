@@ -63,8 +63,7 @@ void Sema::accept_decl(Decl *decl) {
     for (int i = 0; i < declaratorList->get_size(); ++i) {
         auto *initDeclarator = (*declaratorList)[i];
         assert(isa<InitDeclarator>(initDeclarator));
-        SymbolTable::Entry entry = accept_init_declarator(cast<InitDeclarator>(initDeclarator), type);
-        local_table->addSymbol(entry);
+        accept_init_declarator(cast<InitDeclarator>(initDeclarator), type);
     }
 }
 
@@ -165,7 +164,7 @@ Type *Sema::accept_struct_specifier(StructSpecifier *specifier, bool couldBeForw
         // Create an incomplete struct which can be used in the declaration
         if (specifier->has_struct_name()) {
             const auto &identifier = specifier->get_identifier();
-            SymbolTable::Entry *entry = local_table->tryFindStruct(identifier);
+            Entry *entry = local_table->tryFindStruct(identifier);
             if (!entry) {
                 local_table->addStruct(identifier);
             }
@@ -177,7 +176,7 @@ Type *Sema::accept_struct_specifier(StructSpecifier *specifier, bool couldBeForw
         // Add the full struct to the symbol table if needed
         if (specifier->has_struct_name()) {
             const auto &identifier = specifier->get_identifier();
-            SymbolTable::Entry *entry = local_table->findStruct(identifier);
+            Entry *entry = local_table->findStruct(identifier);
             if (entry->is_complete) {
                 throw std::runtime_error("Cannot redefine struct with identifier \"" + identifier + "\"");
             }
@@ -211,7 +210,7 @@ StructType *Sema::accept_struct_decl(StructDeclList *declList) {
 
         auto entryParams = accept_decl_specifiers(cast<DeclSpecifiers>(structDecl->get_spec_qual()));
         auto *declarator = cast<Declarator>(structDecl->get_declarator());
-        SymbolTable::Entry member = accept_declarator(declarator, entryParams, false);
+        Entry member = accept_declarator(declarator, entryParams, false);
 
         if (members.contains(member.identifier)) {
             throw std::runtime_error("Redefinition of struct member \"" + member.identifier + "\"");
@@ -223,9 +222,9 @@ StructType *Sema::accept_struct_decl(StructDeclList *declList) {
     return StructType::get(*this, members);
 }
 
-SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, const QualType type) {
-    auto *declarator = cast<Declarator>(initDeclarator->get_declarator());
-    SymbolTable::Entry entry = accept_declarator(declarator, type, false);
+Entry *Sema::accept_init_declarator(InitDeclarator *initDeclarator, const QualType partialType) {
+    auto *declarator = initDeclarator->get_declarator();
+    Entry entry = accept_declarator(declarator, partialType, false);
     if (initDeclarator->has_initializer()) {
         if (isa<Expression>(initDeclarator->get_initializer())) {
             auto *initExpr = cast<Expression>(initDeclarator->get_initializer());
@@ -238,7 +237,7 @@ SymbolTable::Entry Sema::accept_init_declarator(InitDeclarator *initDeclarator, 
             accept_initializer_list(initializerList, entry.type.type);
         }
     }
-    return entry;
+    return local_table->addSymbol(entry);
 }
 
 void Sema::accept_initializer_list(InitializerList *initializerList, Type *structOrRef) {
@@ -263,8 +262,8 @@ void Sema::accept_initializer_list(InitializerList *initializerList, Type *struc
     }
 }
 
-SymbolTable::Entry Sema::accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract) {
-    SymbolTable::Entry entry = {.type = type};
+Entry Sema::accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract) {
+    Entry entry = {.type = type};
 
     if (declarator->has_pointer()) {
         auto *pointer = cast<AST::Pointer>(declarator->get_pointer());
@@ -336,7 +335,7 @@ QualType Sema::accept_parameterized_declarator(ParameterizedDeclarator *paramete
         auto *parameter = cast<Parameter>(node.get());
         QualType parameterType = accept_decl_specifiers(parameter->get_decl_specs());
         if (parameter->has_declarator()) {
-            SymbolTable::Entry entry = accept_declarator(parameter->get_declarator(), parameterType, true);
+            Entry entry = accept_declarator(parameter->get_declarator(), parameterType, true);
             parameterTypes.emplace_back(entry.type, entry.identifier);
         } else {
             parameterTypes.emplace_back(parameterType);
@@ -354,6 +353,7 @@ void Sema::accept_function_decl(FunctionDecl *functionDecl) {
 
     // TODO: Handle forward declarations
     function_declaration_ptr = global_table->addSymbol(entry);
+    functionDecl->set_function_entry(function_declaration_ptr);
 
     // Add intermediate symbol table to contain function arguments
     // This is functionally the same as adding the arguments to the compound statement table

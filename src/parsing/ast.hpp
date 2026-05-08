@@ -14,6 +14,7 @@
 
 using std::unique_ptr;
 class SymbolTable;
+struct Entry;
 
 namespace AST {
     class Node;
@@ -1023,10 +1024,13 @@ namespace AST {
         unique_ptr<Node> nodes[2];
         bool hasInitializer = true;
 
+        // Semantic Analysis
+        Entry * symbol_entry = nullptr;
+
     public:
         InitDeclarator() : Node(NK_InitDeclarator) {}
-        [[nodiscard]] Node *get_declarator() const {
-            return nodes[DECLARATOR].get();
+        [[nodiscard]] Declarator *get_declarator() const {
+            return cast<Declarator>(nodes[DECLARATOR].get());
         }
 
         [[nodiscard]] bool has_initializer() const {
@@ -1035,6 +1039,19 @@ namespace AST {
 
         [[nodiscard]] Node *get_initializer() const {
             return nodes[INITIALIZER].get();
+        }
+
+        // Semantic Analysis
+
+        Entry *get_symbol_entry() const {
+            if (symbol_entry == nullptr) {
+                throw std::runtime_error("Semantic analysis has not been performed on AST");
+            }
+            return symbol_entry;
+        }
+
+        void set_symbol_entry(Entry *symbolEntry) {
+            this->symbol_entry = symbolEntry;
         }
 
         [[nodiscard]] unique_ptr<Node> *begin() override {
@@ -1172,7 +1189,8 @@ namespace AST {
         unique_ptr<Node> nodes[3];
 
         // Semantic Analysis
-        std::shared_ptr<SymbolTable> symbolTable;
+        std::shared_ptr<SymbolTable> symbolTable = nullptr;
+        Entry *functionEntry = nullptr;
 
     public:
         FunctionDecl() : Node(NK_FunctionDecl) {}
@@ -1199,6 +1217,17 @@ namespace AST {
 
         [[nodiscard]] SymbolTable *get_symbol_table_raw() const {
             return symbolTable.get();
+        }
+
+        void set_function_entry(Entry *entry) {
+            functionEntry = entry;
+        }
+
+        Entry *get_function_entry() const {
+            if (functionEntry == nullptr) {
+                throw std::runtime_error("Semantic analysis has not been performed on AST");
+            }
+            return functionEntry;
         }
 
         unique_ptr<Node> *begin() override {

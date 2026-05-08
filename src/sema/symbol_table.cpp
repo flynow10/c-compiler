@@ -4,11 +4,11 @@
 
 #include "sema.hpp"
 
-SymbolTable::Entry SymbolTable::Entry::create(const std::string &identifier, QualType type) {
+Entry Entry::create(const std::string &identifier, QualType type) {
     return { .identifier = identifier, .type = type };
 }
 
-SymbolTable::Entry * SymbolTable::addStruct(const std::string &identifier) {
+Entry * SymbolTable::addStruct(const std::string &identifier) {
     if (structs.contains(identifier)) {
         throw std::runtime_error("Redefinition of struct with identifier \"" + identifier + "\"");
     }
@@ -16,7 +16,7 @@ SymbolTable::Entry * SymbolTable::addStruct(const std::string &identifier) {
     return &structs[identifier];
 }
 
-SymbolTable::Entry * SymbolTable::addSymbol(const Entry &entry) {
+Entry * SymbolTable::addSymbol(const Entry &entry) {
     if (symbols.contains(entry.identifier)) {
         throw std::runtime_error("Redefinition of symbol \"" + entry.identifier + "\"");
     }
@@ -24,11 +24,11 @@ SymbolTable::Entry * SymbolTable::addSymbol(const Entry &entry) {
     return &symbols[entry.identifier];
 }
 
-SymbolTable::Entry * SymbolTable::addSymbol(const std::string &identifier, QualType type) {
+Entry * SymbolTable::addSymbol(const std::string &identifier, QualType type) {
     return addSymbol(Entry::create(identifier, type));
 }
 
-SymbolTable::Entry * SymbolTable::tryFindStruct(const std::string &identifier) {
+Entry * SymbolTable::tryFindStruct(const std::string &identifier) {
 
     if (!structs.contains(identifier)) {
         if (parent_scope != nullptr) {
@@ -40,7 +40,7 @@ SymbolTable::Entry * SymbolTable::tryFindStruct(const std::string &identifier) {
     return &structs[identifier];
 }
 
-SymbolTable::Entry * SymbolTable::tryFindSymbol(const std::string &identifier) {
+Entry * SymbolTable::tryFindSymbol(const std::string &identifier) {
     if (!symbols.contains(identifier)) {
         if (parent_scope != nullptr) {
             return parent_scope->findSymbol(identifier);
@@ -50,7 +50,7 @@ SymbolTable::Entry * SymbolTable::tryFindSymbol(const std::string &identifier) {
     return &symbols[identifier];
 }
 
-SymbolTable::Entry * SymbolTable::findStruct(const std::string &identifier) {
+Entry * SymbolTable::findStruct(const std::string &identifier) {
     Entry * entry = tryFindStruct(identifier);
     if (!entry) {
         throw std::runtime_error("Cannot find struct with identifier \"" + identifier + "\"");
@@ -58,7 +58,7 @@ SymbolTable::Entry * SymbolTable::findStruct(const std::string &identifier) {
     return entry;
 }
 
-SymbolTable::Entry * SymbolTable::findSymbol(const std::string &identifier) {
+Entry * SymbolTable::findSymbol(const std::string &identifier) {
     Entry * entry = tryFindSymbol(identifier);
     if (!entry) {
         throw std::runtime_error("Cannot find symbol with identifier \"" + identifier + "\"");

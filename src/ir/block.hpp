@@ -11,12 +11,22 @@
 namespace IR {
     class Block {
         Label label;
-        std::vector<std::unique_ptr<Instruction>> statements;
+        std::vector<std::unique_ptr<Instruction>> instructions;
         std::vector<Block *> prev;
         std::vector<Block *> next;
 
-        explicit Block(int label) : label(label) {}
+    public:
+        explicit Block(const Label label) : label(label) {}
+
+        template<typename IType>
+        IType *add_instruction(IType&& inst);
+        [[nodiscard]] bool is_fallthrough() const;
     };
+
+    template<typename IType>
+    IType * Block::add_instruction(IType &&inst) {
+        instructions.push_back(std::make_unique<IType>(std::forward<IType>(inst)));
+    }
 }
 
 #endif //C_COMPILER_BLOCK_HPP

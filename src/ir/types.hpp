@@ -10,6 +10,7 @@ namespace IR {
    using Register = unsigned int;
    using Label = unsigned int;
    using MemSize = size_t;
+   using MemOffset = int;
 }
 
 #endif //IR_TYPES_HPP

@@ -12,7 +12,10 @@ namespace IR {
         std::string identifier;
         std::vector<std::unique_ptr<Block>> blocks;
 
+    public:
         explicit Function(const std::string &identifier) : identifier(identifier) {}
+
+        Block *add_block(Label label);
     };
 
 }

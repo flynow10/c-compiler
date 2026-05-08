@@ -17,15 +17,16 @@ using namespace AST;
 // Symbol Table
 // ----------------------------
 
+struct Entry {
+    std::string identifier;
+    bool is_complete = true;
+    QualType type;
+
+    static Entry create(const std::string &identifier, QualType type);
+};
+
 class SymbolTable {
 public:
-    struct Entry {
-        std::string identifier;
-        bool is_complete = true;
-        QualType type;
-
-        static Entry create(const std::string &identifier, QualType type);
-    };
 
     enum TableType {
         File,
@@ -82,7 +83,7 @@ public:
     std::map<HashValue, FunctionType> function_types;
     SymbolTable *global_table = nullptr;
     SymbolTable *local_table = nullptr;
-    SymbolTable::Entry *function_declaration_ptr = nullptr;
+    Entry *function_declaration_ptr = nullptr;
 
     // ---------
     // Acceptors
@@ -99,9 +100,9 @@ private:
 
     StructType *accept_struct_decl(StructDeclList *declList);
 
-    SymbolTable::Entry accept_init_declarator(InitDeclarator *initDeclarator, QualType type);
+    Entry *accept_init_declarator(InitDeclarator *initDeclarator, QualType partialType);
     void accept_initializer_list(InitializerList *initializerList, Type *structOrRef);
-    SymbolTable::Entry accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract);
+    Entry accept_declarator(Declarator *declarator, QualType type, bool couldBeAbstract);
     QualType accept_index_declarator(IndexDeclarator *indexDeclarator, QualType type, bool inFunctionDef);
     QualType accept_parameterized_declarator(ParameterizedDeclarator *parameterizedDeclarator, QualType returnType);
 
