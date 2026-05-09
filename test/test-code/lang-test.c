@@ -1,10 +1,7 @@
 int main(int argc, char* argv[]) {
     int a = 0;
-    while (a) {
-        a = a + 1;
-        if (a) {
-            break;
-        }
+    for (int i = 0; i < 10; i++) {
+        a += i;
     }
     return a;
 }

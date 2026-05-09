@@ -12,6 +12,7 @@
 namespace IR {
     enum class InstructionType {
         IT_ARITH,
+        IT_COMPARE,
         IT_UNARY,
         IT_MOVE,
         IT_LOAD_LABEL,
@@ -51,6 +52,8 @@ namespace IR {
             OR,
             AND,
             XOR,
+            SHIFT_LEFT,
+            SHIFT_RIGHT,
         };
 
     private:
@@ -72,17 +75,54 @@ namespace IR {
         }
     };
 
+    class CompareInst : public Instruction {
+    public:
+        enum class Operation {
+            EQUAL,
+            NOT_EQUAL,
+            LESS_THAN,
+            LESS_THAN_EQUAL,
+            GREATER_THAN,
+            GREATER_THAN_EQUAL,
+            LESS_THAN_UNSIGNED,
+            LESS_THAN_EQUAL_UNSIGNED,
+            GREATER_THAN_UNSIGNED,
+            GREATER_THAN_EQUAL_UNSIGNED,
+        };
+
+    private:
+        const Register dest, source1, source2;
+        const Operation op;
+    public:
+
+        CompareInst(Register dest, Register source1, Register source2, Operation op) : Instruction(
+                InstructionType::IT_COMPARE), dest(std::move(dest)), source1(std::move(source1)),
+            source2(std::move(source2)), op(op) {
+        }
+
+        [[nodiscard]] std::string print() const override;
+
+        static bool classof(const Instruction *inst) {
+            return inst->get_type() == InstructionType::IT_COMPARE;
+        }
+    };
+
     class UnaryInst : public Instruction {
     public:
         enum class Operation {
             NEGATE,
-            INVERT
+            INVERT,
         };
+
     private:
         Register dest, source;
         Operation op;
+
     public:
-        UnaryInst(Register dest, Register source, const Operation op) : Instruction(InstructionType::IT_UNARY), dest(std::move(dest)), source(std::move(source)), op(op) {}
+        UnaryInst(Register dest, Register source, const Operation op) : Instruction(InstructionType::IT_UNARY),
+                                                                        dest(std::move(dest)),
+                                                                        source(std::move(source)), op(op) {
+        }
 
         [[nodiscard]] std::string print() const override;
 
@@ -164,6 +204,7 @@ namespace IR {
 
     class JumpInst : public Instruction {
         const Label label;
+
     public:
         explicit JumpInst(const Label label) : Instruction(InstructionType::IT_JUMP), label(label) {
         }
@@ -179,8 +220,10 @@ namespace IR {
     class BreakInst : public Instruction {
         const Register condition;
         const Label label;
+
     public:
-        BreakInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK), condition(std::move(condition)), label(label) {
+        BreakInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK),
+                                                           condition(std::move(condition)), label(label) {
         }
 
         [[nodiscard]] std::string print() const override;
@@ -202,6 +245,7 @@ namespace IR {
 
     class ReturnInst : public Instruction {
         Register return_value;
+
     public:
         ReturnInst(Register returnValue) : Instruction(InstructionType::IT_RETURN), return_value(returnValue) {
         }

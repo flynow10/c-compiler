@@ -47,6 +47,8 @@ namespace IR {
         Register lower_expression(const AST::Expression *expr);
         Register lower_assignment(const AST::Assignment *assignment);
         Register lower_binary_op(const AST::BinOp *bin_op);
+        Register lower_unary_op(const AST::UnaryOp *unary_op);
+        Register lower_post_assignment(const AST::PostAssignment *assignment);
         Register lower_identifier(const AST::Identifier *idNod);
         Register lower_constant(const AST::Constant *constantNode);
 

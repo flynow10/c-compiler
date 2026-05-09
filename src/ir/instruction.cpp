@@ -34,8 +34,53 @@ std::string IR::ArithInst::print() const {
         case Operation::XOR:
             ss << "xor";
             break;
+        case Operation::SHIFT_RIGHT:
+            ss << "shr";
+            break;
+        case Operation::SHIFT_LEFT:
+            ss << "shl";
+            break;
     }
 
+    ss << " " << source1 << ", " << source2 << std::endl;
+    return ss.str();
+}
+
+std::string IR::CompareInst::print() const {
+    std::stringstream ss;
+    ss << "\t" << dest << " = cmp ";
+    switch (this->op) {
+        case Operation::EQUAL:
+            ss << "eq";
+            break;
+        case Operation::NOT_EQUAL:
+            ss << "ne";
+            break;
+        case Operation::LESS_THAN:
+            ss << "slt";
+            break;
+        case Operation::LESS_THAN_EQUAL:
+            ss << "sle";
+            break;
+        case Operation::GREATER_THAN:
+            ss << "sgt";
+            break;
+        case Operation::GREATER_THAN_EQUAL:
+            ss << "sge";
+            break;
+        case Operation::LESS_THAN_UNSIGNED:
+            ss << "ult";
+            break;
+        case Operation::LESS_THAN_EQUAL_UNSIGNED:
+            ss << "ule";
+            break;
+        case Operation::GREATER_THAN_UNSIGNED:
+            ss << "ugt";
+            break;
+        case Operation::GREATER_THAN_EQUAL_UNSIGNED:
+            ss << "uge";
+            break;
+    }
     ss << " " << source1 << ", " << source2 << std::endl;
     return ss.str();
 }
@@ -87,7 +132,7 @@ std::string IR::JumpInst::print() const {
 
 std::string IR::BreakInst::print() const {
     std::stringstream ss;
-    ss << "\tbr to @" << label << " if " << condition << " != 0" << std::endl;
+    ss << "\tbr to @" << label << " if " << condition << " = 0" << std::endl;
     return ss.str();
 }
 

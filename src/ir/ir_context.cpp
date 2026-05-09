@@ -257,6 +257,12 @@ IR::Register IR::IRContext::lower_expression(const Expression *expr) {
     if (auto *binOp = dyn_cast<BinOp>(expr)) {
         return lower_binary_op(binOp);
     }
+    if (auto *unaryOp = dyn_cast<UnaryOp>(expr)) {
+        return lower_unary_op(unaryOp);
+    }
+    if (auto *postAssign = dyn_cast<PostAssignment>(expr)) {
+        return lower_post_assignment(postAssign);
+    }
     if (auto *idNode = dyn_cast<Identifier>(expr)) {
         return lower_identifier(idNode);
     }
@@ -267,32 +273,105 @@ IR::Register IR::IRContext::lower_expression(const Expression *expr) {
 }
 
 IR::Register IR::IRContext::lower_assignment(const Assignment *assignment) {
-    if (assignment->get_operation() != Assignment::EQUAL) {
-        throw std::runtime_error("Not implemented");
-    }
     Register assignTo = lower_expression(assignment->get_lhs());
     Register expr = lower_expression(assignment->get_rhs());
-    current_block->add_instruction(MoveInst(assignTo, expr));
+    ArithInst::Operation op;
+    switch (assignment->get_operation()) {
+        case Assignment::EQUAL:
+            current_block->add_instruction(MoveInst(assignTo, expr));
+            return assignTo;
+        case Assignment::ADD:
+            op = ArithInst::Operation::ADD;
+            break;
+        case Assignment::SUB:
+            op = ArithInst::Operation::SUBTRACT;
+            break;
+        case Assignment::MUL:
+            op = ArithInst::Operation::MULTIPLY;
+            break;
+        case Assignment::DIV:
+            op = ArithInst::Operation::DIVIDE;
+            break;
+        case Assignment::LEFT:
+            op = ArithInst::Operation::SHIFT_LEFT;
+            break;
+        case Assignment::RIGHT:
+            op = ArithInst::Operation::SHIFT_RIGHT;
+            break;
+        case Assignment::AND:
+            op = ArithInst::Operation::AND;
+            break;
+        case Assignment::OR:
+            op = ArithInst::Operation::OR;
+            break;
+        case Assignment::XOR:
+            op = ArithInst::Operation::XOR;
+            break;
+        case Assignment::MOD:
+            op = ArithInst::Operation::MODULO;
+            break;
+    }
+    current_block->add_instruction(ArithInst(assignTo, assignTo, expr, op));
     return assignTo;
 }
+
+const std::vector CompareOps = {
+    BinOp::EQUAL,
+    BinOp::NOT_EQUAL,
+    BinOp::LESS_THAN,
+    BinOp::GREATER_THAN,
+    BinOp::LESS_EQUAL,
+    BinOp::GREATER_EQUAL,
+};
 
 IR::Register IR::IRContext::lower_binary_op(const BinOp *binOp) {
     auto source1 = lower_expression(binOp->get_lhs());
     auto source2 = lower_expression(binOp->get_rhs());
+    auto astOp = binOp->get_operation();
+
     auto destReg = get_next_temp_reg();
+    if (std::ranges::find(CompareOps, astOp) != CompareOps.end()) {
+        CompareInst::Operation operation;
+        switch (astOp) {
+            case BinOp::EQUAL:
+                operation = CompareInst::Operation::EQUAL;
+                break;
+            case BinOp::NOT_EQUAL:
+                operation = CompareInst::Operation::NOT_EQUAL;
+                break;
+            case BinOp::LESS_THAN:
+                operation = CompareInst::Operation::LESS_THAN;
+                break;
+            case BinOp::GREATER_THAN:
+                operation = CompareInst::Operation::GREATER_THAN;
+                break;
+            case BinOp::LESS_EQUAL:
+                operation = CompareInst::Operation::LESS_THAN_EQUAL;
+                break;
+            case BinOp::GREATER_EQUAL:
+                operation = CompareInst::Operation::GREATER_THAN_EQUAL;
+                break;
+            default:
+                throw std::runtime_error("Unexpected binary operation");
+        }
+        current_block->add_instruction(CompareInst(destReg, source1, source2, operation));
+        return destReg;
+    }
+
     ArithInst::Operation operation;
-    switch (binOp->get_operation()) {
-        case BinOp::EQUAL:
-        case BinOp::NOT_EQUAL:
-        case BinOp::LESS_THAN:
-        case BinOp::GREATER_THAN:
-        case BinOp::LESS_EQUAL:
-        case BinOp::GREATER_EQUAL:
-        case BinOp::LEFT_SHIFT:
-        case BinOp::RIGHT_SHIFT:
+    switch (astOp) {
         case BinOp::LOGIC_OR:
         case BinOp::LOGIC_AND:
             throw std::runtime_error("Not implemented");
+        case BinOp::GREATER_EQUAL:
+            current_block->add_instruction(CompareInst(destReg, source1, source2, CompareInst::Operation::GREATER_THAN_EQUAL));
+            return destReg;
+        case BinOp::LEFT_SHIFT:
+            operation = ArithInst::Operation::SHIFT_LEFT;
+            break;
+        case BinOp::RIGHT_SHIFT:
+            operation = ArithInst::Operation::SHIFT_RIGHT;
+            break;
         case BinOp::INCLUSIVE_OR:
             operation = ArithInst::Operation::OR;
             break;
@@ -317,9 +396,60 @@ IR::Register IR::IRContext::lower_binary_op(const BinOp *binOp) {
         case BinOp::MOD:
             operation = ArithInst::Operation::MODULO;
             break;
+        default:
+            throw std::runtime_error("Unexpected binary operation");
     }
     current_block->add_instruction(ArithInst(destReg, source1, source2, operation));
     return destReg;
+}
+
+IR::Register IR::IRContext::lower_unary_op(const UnaryOp *unary_op) {
+    Register expr = lower_expression(unary_op->get_rhs());
+    switch (auto operation = unary_op->get_operation()) {
+        case UnaryOp::Op::INCREMENT:
+        case UnaryOp::DECREMENT: {
+            Register constant1 = get_next_temp_reg();
+            current_block->add_instruction(LoadImmInst(constant1, 1));
+            current_block->add_instruction(ArithInst(expr, expr, constant1, operation == UnaryOp::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT));
+            return expr;
+        }
+        case UnaryOp::NEGATE: {
+            Register output = get_next_temp_reg();
+            current_block->add_instruction(UnaryInst(output, expr, UnaryInst::Operation::NEGATE));
+            return output;
+        }
+        case UnaryOp::POSITIVE:
+            return expr;
+        case UnaryOp::NEGATIVE: {
+            Register constant0 = get_next_temp_reg();
+            current_block->add_instruction(LoadImmInst(constant0, 0));
+            Register output = get_next_temp_reg();
+            current_block->add_instruction(ArithInst(output, constant0, expr, ArithInst::Operation::SUBTRACT));
+            return output;
+        }
+        case UnaryOp::INVERT: {
+            Register output = get_next_temp_reg();
+            current_block->add_instruction(UnaryInst(output, expr, UnaryInst::Operation::INVERT));
+            return output;
+        }
+        case UnaryOp::ADDRESS_OF:
+        case UnaryOp::DEREFERENCE:
+        case UnaryOp::SIZEOF:
+            throw std::runtime_error("Not implemented");
+    }
+}
+
+IR::Register IR::IRContext::lower_post_assignment(const PostAssignment *assignment) {
+    Register expr = lower_expression(assignment->get_lhs());
+    Register temp = get_next_temp_reg();
+    current_block->add_instruction(MoveInst(temp, expr));
+
+    auto operation = assignment->get_operation() == PostAssignment::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT;
+    Register constant1 = get_next_temp_reg();
+    current_block->add_instruction(LoadImmInst(constant1, 1));
+    current_block->add_instruction(ArithInst(expr, expr, constant1, operation));
+
+    return temp;
 }
 
 IR::Register IR::IRContext::lower_identifier(const Identifier *idNode) {

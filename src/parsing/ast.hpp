@@ -1856,6 +1856,10 @@ namespace AST {
     public:
         PostAssignment() : Postfix(NK_PostAssignment) {}
 
+        [[nodiscard]] AssignmentType get_operation() const {
+            return operation;
+        }
+
         [[nodiscard]] Expression *get_lhs() const {
             return cast<Expression>(expression.get());
         }
