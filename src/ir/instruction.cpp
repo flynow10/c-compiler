@@ -130,7 +130,7 @@ std::string IR::JumpInst::print() const {
     return ss.str();
 }
 
-std::string IR::BreakInst::print() const {
+std::string IR::BranchInst::print() const {
     std::stringstream ss;
     ss << "\tbr to @" << label << " if " << condition << " = 0" << std::endl;
     return ss.str();

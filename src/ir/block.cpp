@@ -18,8 +18,12 @@ void IR::Block::succeeds(Block *successor) {
     this->next.push_back(successor);
 }
 
+const std::vector<std::unique_ptr<IR::Instruction>> & IR::Block::get_instructions() const {
+    return this->instructions;
+}
+
 bool IR::Block::is_fallthrough() const {
-    return !isa<JumpInst, BreakInst, ReturnInst>(this->instructions.back().get());
+    return !isa<JumpInst, BranchInst, ReturnInst>(this->instructions.back().get());
 }
 
 IR::Label IR::Block::get_label() const {

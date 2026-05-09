@@ -1,18 +1,30 @@
-AST::TranslationUnit 0x603000002350
-|AST::Decl 0x604000000c50
-||AST::TypeSpecifier 0x602000000190
-||AST::InitDeclarator 0x604000000c10
-|||AST::Declarator 0x604000000b90
-||||AST::DirectDeclarator 0x604000000b50
-|AST::FunctionDecl 0x604000000f90
-||AST::DeclSpecifiers 0x603000002260
-|||AST::TypeSpecifier 0x602000000270
-||AST::Declarator 0x604000000e10
-|||AST::DirectDeclarator 0x604000000d90
-|||AST::ParameterizedDeclarator 0x604000000dd0
-||AST::CompoundStatement 0x6030000022f0
-|||AST::Decl 0x604000000f50
-||||AST::TypeSpecifier 0x6020000002b0
-||||AST::InitDeclarator 0x604000000f10
-|||||AST::Declarator 0x604000000e90
-||||||AST::DirectDeclarator 0x604000000e50
+.text
+main:
+	addi sp, sp, -16
+	sw ra, 12(sp)
+	mv t0, sp
+	sw t0, 8(sp)
+.L_main_0:
+	li t0, 0
+	mv t1, t0
+	li t2, 0
+	mv s0, t2
+.L_main_1:
+	li s1, 10
+	slt s2, s0, s1
+	beqz s2, .L_main_3
+	li s3, 2
+	mul s4, s0, s3
+	add t1, t1, s4
+.L_main_2:
+	mv s5, s0
+	li s6, 1
+	add s0, s0, s6
+	j .L_main_1
+.L_main_3:
+	lw t0, 8(sp)
+	mv sp, t0
+	lw ra, 12(sp)
+	addi sp, sp, 16
+	ret
+

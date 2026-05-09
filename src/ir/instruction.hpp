@@ -68,6 +68,22 @@ namespace IR {
                                         source2(std::move(source2)), op(op) {
         }
 
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] const Register &get_source1() const {
+            return source1;
+        }
+
+        [[nodiscard]] const Register &get_source2() const {
+            return source2;
+        }
+
+        [[nodiscard]] Operation get_operation() const {
+            return op;
+        }
+
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
@@ -93,11 +109,27 @@ namespace IR {
     private:
         const Register dest, source1, source2;
         const Operation op;
-    public:
 
+    public:
         CompareInst(Register dest, Register source1, Register source2, Operation op) : Instruction(
                 InstructionType::IT_COMPARE), dest(std::move(dest)), source1(std::move(source1)),
             source2(std::move(source2)), op(op) {
+        }
+
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] const Register &get_source1() const {
+            return source1;
+        }
+
+        [[nodiscard]] const Register &get_source2() const {
+            return source2;
+        }
+
+        [[nodiscard]] Operation get_operation() const {
+            return op;
         }
 
         [[nodiscard]] std::string print() const override;
@@ -138,6 +170,14 @@ namespace IR {
         MoveInst(Register dest, Register source) : Instruction(InstructionType::IT_MOVE), dest(dest), source(source) {
         }
 
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] const Register &get_source() const {
+            return source;
+        }
+
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
@@ -169,6 +209,14 @@ namespace IR {
         LoadImmInst(Register dest, size_t value) : Instruction(InstructionType::IT_LOAD_IMM), dest(dest), value(value) {
         }
 
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] size_t get_value() const {
+            return value;
+        }
+
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
@@ -182,7 +230,7 @@ namespace IR {
 
     public:
         LoadInst(const Register dest, const Register source, const MemOffset offset = 0) : Instruction(
-            InstructionType::IT_LOAD), dest(dest), source(source), offset(offset) {
+                InstructionType::IT_LOAD), dest(dest), source(source), offset(offset) {
         }
 
         [[nodiscard]] std::string print() const override;
@@ -209,6 +257,10 @@ namespace IR {
         explicit JumpInst(const Label label) : Instruction(InstructionType::IT_JUMP), label(label) {
         }
 
+        [[nodiscard]] Label get_label() const {
+            return label;
+        }
+
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
@@ -217,13 +269,21 @@ namespace IR {
     };
 
 
-    class BreakInst : public Instruction {
+    class BranchInst : public Instruction {
         const Register condition;
         const Label label;
 
     public:
-        BreakInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK),
+        BranchInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK),
                                                            condition(std::move(condition)), label(label) {
+        }
+
+        [[nodiscard]] const Register &get_condition() const {
+            return condition;
+        }
+
+        [[nodiscard]] const Label &get_label() const {
+            return label;
         }
 
         [[nodiscard]] std::string print() const override;

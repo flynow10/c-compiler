@@ -7,7 +7,7 @@
 #include <iosfwd>
 #include <ostream>
 
-#include "../parsing/ast.hpp"
+#include "../ir/ir_context.hpp"
 
 class ASMGen {
 protected:
@@ -17,9 +17,14 @@ public:
     }
 
     virtual ~ASMGen() = default;
-    virtual void gen_ast(AST::TranslationUnit *translation_unit) = 0;
+
+    void gen(const IR::IRContext &ir);
+protected:
+    void add_label(const std::string &label);
+    void add_instruction(const std::string &instruction);
+
+    virtual void gen_preamble() = 0;
+    virtual void gen_function(const IR::IRContext &ctx, const IR::Function *func) = 0;
 };
-
-
 
 #endif //C_COMPILER_ASMGEN_HPP

@@ -32,6 +32,10 @@ namespace IR {
         std::unordered_map<const Entry *, std::vector<Register>> id_reg_map;
 
     public:
+        [[nodiscard]] const size_t get_num_functions() const;
+        [[nodiscard]] const Function * get_function(size_t index) const;
+
+    public:
         void lower_AST(const AST::TranslationUnit * ast);
         void lower_globals(const AST::TranslationUnit * ast);
         void lower_function(const AST::FunctionDecl *decl);

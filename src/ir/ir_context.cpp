@@ -5,11 +5,18 @@
 #include "ir_context.hpp"
 
 #include <ranges>
-#include <sys/stat.h>
 
 #include "types.hpp"
 #include "../parsing/ast.hpp"
 #include "../sema/sema.hpp"
+
+const size_t IR::IRContext::get_num_functions() const {
+    return functions.size();
+}
+
+const IR::Function * IR::IRContext::get_function(const size_t index) const {
+    return functions.at(index).get();
+}
 
 void IR::IRContext::lower_AST(const TranslationUnit *ast) {
     lower_globals(ast);
@@ -136,10 +143,10 @@ void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
     thenBlock->is_preceded_by(current_block);
     // TODO: Handle conditional blocks correctly
     if (stmt->has_else()) {
-        current_block->add_instruction(BreakInst(conditionReg, elseBlock->get_label()));
+        current_block->add_instruction(BranchInst(conditionReg, elseBlock->get_label()));
         elseBlock->is_preceded_by(current_block);
     } else {
-        current_block->add_instruction(BreakInst(conditionReg, afterCondition->get_label()));
+        current_block->add_instruction(BranchInst(conditionReg, afterCondition->get_label()));
         afterCondition->is_preceded_by(current_block);
     }
 
@@ -165,7 +172,7 @@ void IR::IRContext::lower_while(const WhileStatement *stmt) {
 
     current_block = body;
     const Register conditionReg = lower_condition(stmt->get_condition());
-    current_block->add_instruction(BreakInst(conditionReg, afterLoop->get_label()));
+    current_block->add_instruction(BranchInst(conditionReg, afterLoop->get_label()));
     afterLoop->is_preceded_by(current_block);
 
     lower_statement(stmt->get_body());
@@ -195,7 +202,7 @@ void IR::IRContext::lower_do(const DoStatement *stmt) {
     const Register conditionReg = lower_condition(stmt->get_condition());
     const Register invertedCondition = get_next_temp_reg();
     current_block->add_instruction(UnaryInst(invertedCondition, conditionReg, UnaryInst::Operation::NEGATE));
-    current_block->add_instruction(BreakInst(invertedCondition, body->get_label()));
+    current_block->add_instruction(BranchInst(invertedCondition, body->get_label()));
     body->is_preceded_by(current_block);
 
     afterLoop->is_preceded_by(current_block);
@@ -226,7 +233,7 @@ void IR::IRContext::lower_for(const ForStatement *stmt) {
     current_block = body;
     if (stmt->has_condition()) {
         const Register conditionReg = lower_condition(stmt->get_condition());
-        current_block->add_instruction(BreakInst(conditionReg, afterLoop->get_label()));
+        current_block->add_instruction(BranchInst(conditionReg, afterLoop->get_label()));
         afterLoop->is_preceded_by(body);
     }
     lower_statement(stmt->get_body());

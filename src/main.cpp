@@ -6,6 +6,7 @@
 #include <unordered_set>
 
 #include "lexer.hpp"
+#include "gen/riscv/riscv_target.hpp"
 #include "ir/ir_context.hpp"
 #include "parsing/parse.hpp"
 #include "sema/sema.hpp"
@@ -69,11 +70,21 @@ int main(const int argc, char *argv[]) {
     IR::IRContext context;
     context.lower_AST(cast<TranslationUnit>(ast.get()));
 
+    std::ostream *output;
+    std::ofstream outputFile;
+
     if (options.outFile.empty()) {
-        std::cout << context << std::endl;
+        output = &std::cout;
     } else {
-        std::ofstream outputFile(options.outFile, std::ofstream::out | std::ofstream::trunc);
-        outputFile << context;
+        outputFile = std::ofstream(options.outFile, std::ofstream::out | std::ofstream::trunc);
+        output = &outputFile;
+    }
+    // *output << context;
+
+    RISCVTarget target(*output);
+    target.gen(context);
+
+    if (outputFile.is_open()) {
         outputFile.close();
     }
 

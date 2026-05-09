@@ -24,7 +24,7 @@ namespace IR {
     private:
         void succeeds(Block *successor);
     public:
-
+        [[nodiscard]] const std::vector<std::unique_ptr<Instruction>> &get_instructions() const;
         [[nodiscard]] bool is_fallthrough() const;
         [[nodiscard]] Label get_label() const;
 
