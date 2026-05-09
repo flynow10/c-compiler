@@ -40,6 +40,21 @@ std::string IR::ArithInst::print() const {
     return ss.str();
 }
 
+std::string IR::UnaryInst::print() const {
+    std::stringstream ss;
+    ss << "\t" << dest << " = ";
+    switch (this->op) {
+        case Operation::INVERT:
+            ss << "invert";
+            break;
+        case Operation::NEGATE:
+            ss << "negate";
+            break;
+    }
+    ss << " " << source << std::endl;
+    return ss.str();
+}
+
 std::string IR::MoveInst::print() const {
     std::stringstream ss;
     ss << "\t" << dest << " = mov " << source << std::endl;

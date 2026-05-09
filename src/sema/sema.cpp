@@ -461,23 +461,29 @@ void Sema::accept_do_statement(DoStatement *doStatement) {
 void Sema::accept_for_statement(ForStatement *forStatement) {
     std::shared_ptr<SymbolTable> forLoopScope = std::make_shared<SymbolTable>(local_table, SymbolTable::Loop);
     local_table = forLoopScope.get();
-    auto *initializer = forStatement->get_initialization();
-    if (auto *expr = dyn_cast<Expression>(initializer)) {
-        accept_expression(expr);
-    } else if (auto *decl = dyn_cast<Decl>(initializer)) {
-        accept_decl(decl);
-    } else {
-        throw std::runtime_error("Unexpected initializer type");
+    if (forStatement->has_init()) {
+        auto *initializer = forStatement->get_initialization();
+        if (auto *expr = dyn_cast<Expression>(initializer)) {
+            accept_expression(expr);
+        } else if (auto *decl = dyn_cast<Decl>(initializer)) {
+            accept_decl(decl);
+        } else {
+            throw std::runtime_error("Unexpected initializer type");
+        }
     }
 
-    auto *condition = forStatement->get_condition();
-    auto conditionType = accept_expression(condition);
-    if (!is_scalar_type(conditionType.type)) {
-        throw std::runtime_error("For statement condition must be a scalar type");
+    if (forStatement->has_condition()) {
+        auto *condition = forStatement->get_condition();
+        auto conditionType = accept_expression(condition);
+        if (!is_scalar_type(conditionType.type)) {
+            throw std::runtime_error("For statement condition must be a scalar type");
+        }
     }
 
-    auto *increment = forStatement->get_increment();
-    accept_expression(increment);
+    if (forStatement->has_increment()) {
+        auto *increment = forStatement->get_increment();
+        accept_expression(increment);
+    }
 
     accept_compound_statement(forStatement->get_body(), forLoopScope);
 }

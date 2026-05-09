@@ -37,6 +37,7 @@ namespace IR {
         void lower_function(const AST::FunctionDecl *decl);
         void lower_statement(const AST::Statement *stmt);
         void lower_init_decl(const AST::InitDeclarator *initDecl);
+        void lower_control(const AST::ControlStatement *controlStmt);
         void lower_selection(const AST::SelectionStatement *stmt);
         void lower_while(const AST::WhileStatement *stmt);
         void lower_do(const AST::DoStatement *stmt);

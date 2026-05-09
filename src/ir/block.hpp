@@ -20,9 +20,9 @@ namespace IR {
 
         template<typename IType>
         IType *add_instruction(IType&& inst);
-        void is_dominated_by(Block *dominator);
+        void is_preceded_by(Block *preceder);
     private:
-        void dominates_over(Block *successor);
+        void succeeds(Block *successor);
     public:
 
         [[nodiscard]] bool is_fallthrough() const;

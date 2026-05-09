@@ -5,6 +5,7 @@
 #include "ir_context.hpp"
 
 #include <ranges>
+#include <sys/stat.h>
 
 #include "types.hpp"
 #include "../parsing/ast.hpp"
@@ -52,20 +53,15 @@ void IR::IRContext::lower_statement(const Statement *stmt) {
             lower_init_decl(initDecl);
         }
     } else if (auto *controlStmt = dyn_cast<ControlStatement>(stmt)) {
-        if (controlStmt->is_return()) {
-            if (controlStmt->has_return_expr()) {
-                const Register returnReg = lower_expression(controlStmt->get_return_expression());
-                current_block->add_instruction(ReturnInst(returnReg));
-            } else {
-                const Register returnReg = get_next_temp_reg();
-                current_block->add_instruction(LoadImmInst(returnReg, 0));
-                current_block->add_instruction(ReturnInst(returnReg));
-            }
-        }
+        lower_control(controlStmt);
     } else if (auto *selectionStmt = dyn_cast<SelectionStatement>(stmt)) {
         lower_selection(selectionStmt);
     } else if (auto *whileStmt = dyn_cast<WhileStatement>(stmt)) {
         lower_while(whileStmt);
+    } else  if (auto *doStmt = dyn_cast<DoStatement>(stmt)) {
+        lower_do(doStmt);
+    } else if (auto *forStmt = dyn_cast<ForStatement>(stmt)) {
+        lower_for(forStmt);
     } else if (auto *expressionStmt = dyn_cast<ExpressionStatement>(stmt)) {
         lower_expression(expressionStmt->get_expression());
     }
@@ -73,7 +69,6 @@ void IR::IRContext::lower_statement(const Statement *stmt) {
 
 void IR::IRContext::lower_init_decl(const InitDeclarator *initDecl) {
     auto *entry = initDecl->get_symbol_entry();
-    const Register exprReg = lower_expression(cast<Expression>(initDecl->get_initializer()));
     Register::Type type;
     if (entry->type.is_void_type()) {
         return;
@@ -101,8 +96,33 @@ void IR::IRContext::lower_init_decl(const InitDeclarator *initDecl) {
         identifier = newId;
     }
     const auto destReg = Register(identifier, type, entry->type.get_size());
-    current_block->add_instruction(MoveInst(destReg, exprReg));
+    if (initDecl->has_initializer()) {
+        const Register exprReg = lower_expression(cast<Expression>(initDecl->get_initializer()));
+        current_block->add_instruction(MoveInst(destReg, exprReg));
+    }
     id_reg_map[entry].push_back(destReg);
+}
+
+void IR::IRContext::lower_control(const ControlStatement *controlStmt) {
+    if (controlStmt->is_return()) {
+        if (controlStmt->has_return_expr()) {
+            const Register returnReg = lower_expression(controlStmt->get_return_expression());
+            current_block->add_instruction(ReturnInst(returnReg));
+        } else {
+            const Register returnReg = get_next_temp_reg();
+            current_block->add_instruction(LoadImmInst(returnReg, 0));
+            current_block->add_instruction(ReturnInst(returnReg));
+        }
+    } else if (controlStmt->is_break()) {
+        auto *jumpPoint = loop_end.top();
+        current_block->add_instruction(JumpInst(jumpPoint->get_label()));
+        jumpPoint->is_preceded_by(current_block);
+        // TODO: Consider how adding jump instructions changes block precedence
+    } else {
+        auto *jumpPoint = loop_begin.top();
+        current_block->add_instruction(JumpInst(jumpPoint->get_label()));
+        jumpPoint->is_preceded_by(current_block);
+    }
 }
 
 void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
@@ -113,24 +133,24 @@ void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
         elseBlock = current_function->add_block(function_counter++, thenBlock);
     }
     Block *afterCondition = current_function->add_block(function_counter++, stmt->has_else() ? elseBlock : thenBlock);
-    thenBlock->is_dominated_by(current_block);
+    thenBlock->is_preceded_by(current_block);
     // TODO: Handle conditional blocks correctly
     if (stmt->has_else()) {
         current_block->add_instruction(BreakInst(conditionReg, elseBlock->get_label()));
-        elseBlock->is_dominated_by(current_block);
+        elseBlock->is_preceded_by(current_block);
     } else {
         current_block->add_instruction(BreakInst(conditionReg, afterCondition->get_label()));
-        afterCondition->is_dominated_by(current_block);
+        afterCondition->is_preceded_by(current_block);
     }
 
     current_block = thenBlock;
     lower_statement(stmt->get_then());
-    afterCondition->is_dominated_by(current_block);
+    afterCondition->is_preceded_by(current_block);
     if (stmt->has_else()) {
         current_block->add_instruction(JumpInst(afterCondition->get_label()));
         current_block = elseBlock;
         lower_statement(stmt->get_else());
-        afterCondition->is_dominated_by(current_block);
+        afterCondition->is_preceded_by(current_block);
     }
 
     current_block = afterCondition;
@@ -139,17 +159,18 @@ void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
 void IR::IRContext::lower_while(const WhileStatement *stmt) {
     Block * body = current_function->add_block(function_counter++, current_block);
     Block * afterLoop = current_function->add_block(function_counter++, body);
-    body->is_dominated_by(current_block);
-    afterLoop->is_dominated_by(body);
+    body->is_preceded_by(current_block);
     loop_begin.push(body);
     loop_end.push(afterLoop);
 
     current_block = body;
     const Register conditionReg = lower_condition(stmt->get_condition());
     current_block->add_instruction(BreakInst(conditionReg, afterLoop->get_label()));
+    afterLoop->is_preceded_by(current_block);
 
     lower_statement(stmt->get_body());
     current_block->add_instruction(JumpInst(body->get_label()));
+    body->is_preceded_by(current_block);
 
     current_block = afterLoop;
 
@@ -158,9 +179,70 @@ void IR::IRContext::lower_while(const WhileStatement *stmt) {
 }
 
 void IR::IRContext::lower_do(const DoStatement *stmt) {
+    Block *body = current_function->add_block(function_counter++, current_block);
+    Block *condition = current_function->add_block(function_counter++, body);
+    Block *afterLoop = current_function->add_block(function_counter++, condition);
+    body->is_preceded_by(current_block);
+
+    loop_begin.push(condition);
+    loop_end.push(afterLoop);
+
+    current_block = body;
+    lower_statement(stmt->get_body());
+    condition->is_preceded_by(current_block);
+
+    current_block = condition;
+    const Register conditionReg = lower_condition(stmt->get_condition());
+    const Register invertedCondition = get_next_temp_reg();
+    current_block->add_instruction(UnaryInst(invertedCondition, conditionReg, UnaryInst::Operation::NEGATE));
+    current_block->add_instruction(BreakInst(invertedCondition, body->get_label()));
+    body->is_preceded_by(current_block);
+
+    afterLoop->is_preceded_by(current_block);
+    current_block = afterLoop;
+
+    loop_begin.pop();
+    loop_end.pop();
 }
 
 void IR::IRContext::lower_for(const ForStatement *stmt) {
+    if (stmt->has_init()) {
+        auto *initNode = stmt->get_initialization();
+        if (isa<Expression>(initNode)) {
+            lower_expression(cast<Expression>(initNode));
+        } else {
+            lower_statement(cast<Statement>(initNode));
+        }
+    }
+
+    Block *body = current_function->add_block(function_counter++, current_block);
+    Block *increment = current_function->add_block(function_counter++, body);
+    Block *afterLoop = current_function->add_block(function_counter++, increment);
+    body->is_preceded_by(current_block);
+
+    loop_begin.push(increment);
+    loop_end.push(afterLoop);
+
+    current_block = body;
+    if (stmt->has_condition()) {
+        const Register conditionReg = lower_condition(stmt->get_condition());
+        current_block->add_instruction(BreakInst(conditionReg, afterLoop->get_label()));
+        afterLoop->is_preceded_by(body);
+    }
+    lower_statement(stmt->get_body());
+
+    increment->is_preceded_by(current_block);
+    current_block = increment;
+    if (stmt->has_increment()) {
+        lower_expression(stmt->get_increment());
+    }
+    current_block->add_instruction(JumpInst(body->get_label()));
+    body->is_preceded_by(current_block);
+
+    current_block = afterLoop;
+
+    loop_begin.pop();
+    loop_end.pop();
 }
 
 IR::Register IR::IRContext::lower_condition(const Expression *expr) {

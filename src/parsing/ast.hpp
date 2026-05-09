@@ -1043,7 +1043,7 @@ namespace AST {
 
         // Semantic Analysis
 
-        Entry *get_symbol_entry() const {
+        [[nodiscard]] Entry *get_symbol_entry() const {
             if (symbol_entry == nullptr) {
                 throw std::runtime_error("Semantic analysis has not been performed on AST");
             }
@@ -1965,6 +1965,9 @@ namespace AST {
         }
 
         [[nodiscard]] const Entry *get_symbol_entry() const {
+            if (symbol_entry == nullptr) {
+                throw std::runtime_error("Semantic analysis has not been performed on AST");
+            }
             return this->symbol_entry;
         }
 
@@ -2200,14 +2203,27 @@ namespace AST {
 
     public:
         ForStatement() : Statement(NK_ForStatement) {}
+
+        [[nodiscard]] bool has_init() const {
+            return hasInit;
+        }
+
         [[nodiscard]] Node *get_initialization() const {
             if (!hasInit) return nullptr;
             return nodes[INITIALIZATION].get();
         }
 
+        [[nodiscard]] bool has_condition() const {
+            return hasCondition;
+        }
+
         [[nodiscard]] Expression *get_condition() const {
             if (!hasCondition) return nullptr;
             return cast<Expression>(nodes[CONDITION].get());
+        }
+
+        [[nodiscard]] bool has_increment() const {
+            return hasIncrement;
         }
 
         [[nodiscard]] Expression *get_increment() const {

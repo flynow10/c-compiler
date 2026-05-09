@@ -5,12 +5,14 @@
 #ifndef STATEMENT_HPP
 #define STATEMENT_HPP
 #include <string>
+#include <utility>
 
 #include "types.hpp"
 
 namespace IR {
     enum class InstructionType {
         IT_ARITH,
+        IT_UNARY,
         IT_MOVE,
         IT_LOAD_LABEL,
         IT_LOAD_IMM,
@@ -56,17 +58,36 @@ namespace IR {
         Operation op;
 
     public:
-        ArithInst(const Register dest, const Register source1, const Register source2,
+        ArithInst(Register dest, Register source1, Register source2,
                   const Operation op) : Instruction(InstructionType::IT_ARITH),
-                                        dest(dest),
-                                        source1(source1),
-                                        source2(source2), op(op) {
+                                        dest(std::move(dest)),
+                                        source1(std::move(source1)),
+                                        source2(std::move(source2)), op(op) {
         }
 
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_ARITH;
+        }
+    };
+
+    class UnaryInst : public Instruction {
+    public:
+        enum class Operation {
+            NEGATE,
+            INVERT
+        };
+    private:
+        Register dest, source;
+        Operation op;
+    public:
+        UnaryInst(Register dest, Register source, const Operation op) : Instruction(InstructionType::IT_UNARY), dest(std::move(dest)), source(std::move(source)), op(op) {}
+
+        [[nodiscard]] std::string print() const override;
+
+        static bool classof(const Instruction *inst) {
+            return inst->get_type() == InstructionType::IT_UNARY;
         }
     };
 

@@ -9,12 +9,12 @@
 #include "../casting.hpp"
 
 
-void IR::Block::is_dominated_by(Block *dominator) {
-    this->prev.push_back(dominator);
-    dominator->dominates_over(this);
+void IR::Block::is_preceded_by(Block *preceder) {
+    this->prev.push_back(preceder);
+    preceder->succeeds(this);
 }
 
-void IR::Block::dominates_over(Block *successor) {
+void IR::Block::succeeds(Block *successor) {
     this->next.push_back(successor);
 }
 
@@ -27,7 +27,7 @@ IR::Label IR::Block::get_label() const {
 }
 
 std::ostream & IR::operator<<(std::ostream &os, const Block &block) {
-    os << "\t@" << block.label << ": (dominates";
+    os << "\t@" << block.label << ": (precedes";
     for (const auto & next : block.next) {
         os << " @" << next->label;
     }
