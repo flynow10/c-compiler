@@ -27,7 +27,11 @@ IR::Label IR::Block::get_label() const {
 }
 
 std::ostream & IR::operator<<(std::ostream &os, const Block &block) {
-    os << "\t@" << block.label << ":" << std::endl;
+    os << "\t@" << block.label << ": (dominates";
+    for (const auto & next : block.next) {
+        os << " @" << next->label;
+    }
+    os << ")" << std::endl;
     for (const auto & instruction : block.instructions) {
         os << *instruction;
     }

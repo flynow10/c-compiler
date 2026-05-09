@@ -26,6 +26,9 @@ namespace IR {
 
         Function * current_function = nullptr;
         Block * current_block = nullptr;
+
+        std::stack<Block *> loop_begin;
+        std::stack<Block *> loop_end;
         std::unordered_map<const Entry *, std::vector<Register>> id_reg_map;
 
     public:
@@ -35,8 +38,13 @@ namespace IR {
         void lower_statement(const AST::Statement *stmt);
         void lower_init_decl(const AST::InitDeclarator *initDecl);
         void lower_selection(const AST::SelectionStatement *stmt);
+        void lower_while(const AST::WhileStatement *stmt);
+        void lower_do(const AST::DoStatement *stmt);
+        void lower_for(const AST::ForStatement *stmt);
 
+        Register lower_condition(const AST::Expression *expr);
         Register lower_expression(const AST::Expression *expr);
+        Register lower_assignment(const AST::Assignment *assignment);
         Register lower_binary_op(const AST::BinOp *bin_op);
         Register lower_identifier(const AST::Identifier *idNod);
         Register lower_constant(const AST::Constant *constantNode);

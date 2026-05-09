@@ -16,6 +16,7 @@ namespace IR {
         explicit Function(const std::string &identifier) : identifier(identifier) {}
 
         Block *add_block(Label label);
+        Block *add_block(Label label, Block *after);
 
         friend std::ostream &operator<<(std::ostream &os, const Function &function);
     };

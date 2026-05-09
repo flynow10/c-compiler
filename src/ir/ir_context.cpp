@@ -64,6 +64,10 @@ void IR::IRContext::lower_statement(const Statement *stmt) {
         }
     } else if (auto *selectionStmt = dyn_cast<SelectionStatement>(stmt)) {
         lower_selection(selectionStmt);
+    } else if (auto *whileStmt = dyn_cast<WhileStatement>(stmt)) {
+        lower_while(whileStmt);
+    } else if (auto *expressionStmt = dyn_cast<ExpressionStatement>(stmt)) {
+        lower_expression(expressionStmt->get_expression());
     }
 }
 
@@ -102,20 +106,20 @@ void IR::IRContext::lower_init_decl(const InitDeclarator *initDecl) {
 }
 
 void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
-    const Register exprReg = lower_expression(stmt->get_condition());
-    Block *thenBlock = current_function->add_block(function_counter++);
+    const Register conditionReg = lower_condition(stmt->get_condition());
+    Block *thenBlock = current_function->add_block(function_counter++, current_block);
     Block *elseBlock;
     if (stmt->has_else()) {
-        elseBlock = current_function->add_block(function_counter++);
+        elseBlock = current_function->add_block(function_counter++, thenBlock);
     }
-    Block *afterCondition = current_function->add_block(function_counter++);
+    Block *afterCondition = current_function->add_block(function_counter++, stmt->has_else() ? elseBlock : thenBlock);
     thenBlock->is_dominated_by(current_block);
     // TODO: Handle conditional blocks correctly
     if (stmt->has_else()) {
-        current_block->add_instruction(BreakInst(exprReg, elseBlock->get_label()));
+        current_block->add_instruction(BreakInst(conditionReg, elseBlock->get_label()));
         elseBlock->is_dominated_by(current_block);
     } else {
-        current_block->add_instruction(BreakInst(exprReg, afterCondition->get_label()));
+        current_block->add_instruction(BreakInst(conditionReg, afterCondition->get_label()));
         afterCondition->is_dominated_by(current_block);
     }
 
@@ -132,7 +136,42 @@ void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
     current_block = afterCondition;
 }
 
+void IR::IRContext::lower_while(const WhileStatement *stmt) {
+    Block * body = current_function->add_block(function_counter++, current_block);
+    Block * afterLoop = current_function->add_block(function_counter++, body);
+    body->is_dominated_by(current_block);
+    afterLoop->is_dominated_by(body);
+    loop_begin.push(body);
+    loop_end.push(afterLoop);
+
+    current_block = body;
+    const Register conditionReg = lower_condition(stmt->get_condition());
+    current_block->add_instruction(BreakInst(conditionReg, afterLoop->get_label()));
+
+    lower_statement(stmt->get_body());
+    current_block->add_instruction(JumpInst(body->get_label()));
+
+    current_block = afterLoop;
+
+    loop_begin.pop();
+    loop_end.pop();
+}
+
+void IR::IRContext::lower_do(const DoStatement *stmt) {
+}
+
+void IR::IRContext::lower_for(const ForStatement *stmt) {
+}
+
+IR::Register IR::IRContext::lower_condition(const Expression *expr) {
+    // TODO: Implement proper expression lowering
+    return lower_expression(expr);
+}
+
 IR::Register IR::IRContext::lower_expression(const Expression *expr) {
+    if (auto *assignment = dyn_cast<Assignment>(expr)) {
+        return lower_assignment(assignment);
+    }
     if (auto *binOp = dyn_cast<BinOp>(expr)) {
         return lower_binary_op(binOp);
     }
@@ -143,6 +182,16 @@ IR::Register IR::IRContext::lower_expression(const Expression *expr) {
         return lower_constant(constantNode);
     }
     throw std::runtime_error("Not implemented");
+}
+
+IR::Register IR::IRContext::lower_assignment(const Assignment *assignment) {
+    if (assignment->get_operation() != Assignment::EQUAL) {
+        throw std::runtime_error("Not implemented");
+    }
+    Register assignTo = lower_expression(assignment->get_lhs());
+    Register expr = lower_expression(assignment->get_rhs());
+    current_block->add_instruction(MoveInst(assignTo, expr));
+    return assignTo;
 }
 
 IR::Register IR::IRContext::lower_binary_op(const BinOp *binOp) {

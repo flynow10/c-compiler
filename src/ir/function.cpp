@@ -10,6 +10,12 @@ IR::Block * IR::Function::add_block(Label label) {
     return blocks.emplace_back(std::make_unique<Block>(label)).get();
 }
 
+IR::Block * IR::Function::add_block(Label label, Block *after) {
+    auto block = std::make_unique<Block>(label);
+    auto position = std::ranges::find_if(blocks, [&after](auto &&b){return b.get() == after;}) + 1;
+    return blocks.insert(position, std::move(block))->get();
+}
+
 std::ostream & IR::operator<<(std::ostream &os, const Function &function) {
     os << "fn " << function.identifier << "() {" << std::endl;
     for (const auto & block : function.blocks) {
