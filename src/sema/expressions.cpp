@@ -206,6 +206,7 @@ QualType Sema::accept_member_access(MemberAccess *memberAccess) {
 QualType Sema::accept_identifier(Identifier *identifier) {
     auto &idValue = identifier->get_value();
     const auto *entry = local_table->findSymbol(idValue);
+    identifier->set_symbol_entry(entry);
     return entry->type;
 }
 

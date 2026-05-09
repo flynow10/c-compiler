@@ -14,6 +14,8 @@ namespace IR {
         std::string identifier;
         Label label;
         MemSize size;
+
+        friend std::ostream & operator<<(std::ostream &os, const Global &global);
     };
 
 }

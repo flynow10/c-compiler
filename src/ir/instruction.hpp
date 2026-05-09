@@ -4,6 +4,8 @@
 
 #ifndef STATEMENT_HPP
 #define STATEMENT_HPP
+#include <string>
+
 #include "types.hpp"
 
 namespace IR {
@@ -27,7 +29,13 @@ namespace IR {
         explicit Instruction(InstructionType type) : type(type) {
         }
 
-        InstructionType get_type() const { return type; }
+        virtual ~Instruction() = default;
+
+        [[nodiscard]] InstructionType get_type() const { return type; }
+
+        [[nodiscard]] virtual std::string print() const { return ""; }
+
+        friend std::ostream &operator<<(std::ostream &os, const Instruction &inst);
     };
 
     class ArithInst : public Instruction {
@@ -55,6 +63,8 @@ namespace IR {
                                         source2(source2), op(op) {
         }
 
+        [[nodiscard]] std::string print() const override;
+
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_ARITH;
         }
@@ -67,6 +77,8 @@ namespace IR {
         MoveInst(Register dest, Register source) : Instruction(InstructionType::IT_MOVE), dest(dest), source(source) {
         }
 
+        [[nodiscard]] std::string print() const override;
+
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_MOVE;
         }
@@ -77,7 +89,11 @@ namespace IR {
         Label label = 0;
 
     public:
-        LoadLabelInst(Register dest, Label label) : Instruction(InstructionType::IT_LOAD_LABEL), dest(dest), label(label) {};
+        LoadLabelInst(Register dest, Label label) : Instruction(InstructionType::IT_LOAD_LABEL), dest(dest),
+                                                    label(label) {
+        };
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_LOAD_LABEL;
@@ -87,8 +103,12 @@ namespace IR {
     class LoadImmInst : public Instruction {
         const Register dest;
         size_t value;
+
     public:
-        LoadImmInst(Register dest, size_t value) : Instruction(InstructionType::IT_LOAD_IMM), dest(dest), value(value) {}
+        LoadImmInst(Register dest, size_t value) : Instruction(InstructionType::IT_LOAD_IMM), dest(dest), value(value) {
+        }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_LOAD_IMM;
@@ -103,6 +123,8 @@ namespace IR {
         LoadInst(const Register dest, const Register source, const MemOffset offset = 0) : Instruction(
             InstructionType::IT_LOAD), dest(dest), source(source), offset(offset) {
         }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_LOAD;
@@ -120,9 +142,12 @@ namespace IR {
     };
 
     class JumpInst : public Instruction {
+        const Label label;
     public:
-        JumpInst() : Instruction(InstructionType::IT_JUMP) {
+        explicit JumpInst(const Label label) : Instruction(InstructionType::IT_JUMP), label(label) {
         }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_JUMP;
@@ -131,9 +156,13 @@ namespace IR {
 
 
     class BreakInst : public Instruction {
+        const Register condition;
+        const Label label;
     public:
-        BreakInst() : Instruction(InstructionType::IT_BREAK) {
+        BreakInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK), condition(std::move(condition)), label(label) {
         }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_BREAK;
@@ -151,9 +180,12 @@ namespace IR {
     };
 
     class ReturnInst : public Instruction {
+        Register return_value;
     public:
-        ReturnInst() : Instruction(InstructionType::IT_RETURN) {
+        ReturnInst(Register returnValue) : Instruction(InstructionType::IT_RETURN), return_value(returnValue) {
         }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_RETURN;

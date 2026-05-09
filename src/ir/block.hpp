@@ -20,12 +20,20 @@ namespace IR {
 
         template<typename IType>
         IType *add_instruction(IType&& inst);
+        void is_dominated_by(Block *dominator);
+    private:
+        void dominates_over(Block *successor);
+    public:
+
         [[nodiscard]] bool is_fallthrough() const;
+        [[nodiscard]] Label get_label() const;
+
+        friend std::ostream &operator<<(std::ostream &os, const Block &block);
     };
 
     template<typename IType>
     IType * Block::add_instruction(IType &&inst) {
-        instructions.push_back(std::make_unique<IType>(std::forward<IType>(inst)));
+        return static_cast<IType* >(instructions.emplace_back(std::make_unique<IType>(std::forward<IType>(inst))).get());
     }
 }
 

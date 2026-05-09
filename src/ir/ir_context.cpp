@@ -4,10 +4,13 @@
 
 #include "ir_context.hpp"
 
+#include <ranges>
+
+#include "types.hpp"
 #include "../parsing/ast.hpp"
 #include "../sema/sema.hpp"
 
-void IR::IRContext::lower_AST(TranslationUnit *ast) {
+void IR::IRContext::lower_AST(const TranslationUnit *ast) {
     lower_globals(ast);
 
     for (const auto & node : *ast) {
@@ -17,7 +20,7 @@ void IR::IRContext::lower_AST(TranslationUnit *ast) {
     }
 }
 
-void IR::IRContext::lower_globals(TranslationUnit *ast) {
+void IR::IRContext::lower_globals(const TranslationUnit *ast) {
     auto *symtable = ast->get_symbol_table_raw();
     for (const auto &[id, entry] : symtable->symbols) {
         if (!entry.type.is_function()) {
@@ -27,17 +30,17 @@ void IR::IRContext::lower_globals(TranslationUnit *ast) {
     }
 }
 
-void IR::IRContext::lower_function(FunctionDecl *decl) {
+void IR::IRContext::lower_function(const FunctionDecl *decl) {
     auto *functionEntry = decl->get_function_entry();
     id_reg_map.clear();
     function_counter = 0;
     current_function = functions.emplace_back(std::make_unique<Function>(functionEntry->identifier)).get();
-    current_block = current_function->add_block(0);
+    current_block = current_function->add_block(function_counter++);
     auto *body = decl->get_body();
     lower_statement(body);
 }
 
-void IR::IRContext::lower_statement(Statement *stmt) {
+void IR::IRContext::lower_statement(const Statement *stmt) {
     if (auto *compoundStmt = dyn_cast<CompoundStatement>(stmt)) {
         for (const auto & node : *compoundStmt) {
             lower_statement(cast<Statement>(node.get()));
@@ -46,28 +49,106 @@ void IR::IRContext::lower_statement(Statement *stmt) {
         auto *declList = decl->get_declarators();
         for (int i = 0; i < declList->get_size(); ++i) {
             auto initDecl = cast<InitDeclarator>((*declList)[i]);
-            auto *entry = initDecl->get_symbol_entry();
-            const Register destReg = get_next_reg();
-            id_reg_map[entry->identifier].push_back(destReg);
-            const Register exprReg = lower_expression(cast<Expression>(initDecl->get_initializer()));
-            current_block->add_instruction<MoveInst>(MoveInst(destReg, exprReg));
+            lower_init_decl(initDecl);
         }
+    } else if (auto *controlStmt = dyn_cast<ControlStatement>(stmt)) {
+        if (controlStmt->is_return()) {
+            if (controlStmt->has_return_expr()) {
+                const Register returnReg = lower_expression(controlStmt->get_return_expression());
+                current_block->add_instruction(ReturnInst(returnReg));
+            } else {
+                const Register returnReg = get_next_temp_reg();
+                current_block->add_instruction(LoadImmInst(returnReg, 0));
+                current_block->add_instruction(ReturnInst(returnReg));
+            }
+        }
+    } else if (auto *selectionStmt = dyn_cast<SelectionStatement>(stmt)) {
+        lower_selection(selectionStmt);
     }
 }
 
-IR::Register IR::IRContext::lower_expression(Expression *expr) {
+void IR::IRContext::lower_init_decl(const InitDeclarator *initDecl) {
+    auto *entry = initDecl->get_symbol_entry();
+    const Register exprReg = lower_expression(cast<Expression>(initDecl->get_initializer()));
+    Register::Type type;
+    if (entry->type.is_void_type()) {
+        return;
+    }
+    if (entry->type.is_struct()) {
+        type = Register::Type::Struct;
+    } else if (entry->type.is_array() || entry->type.is_pointer() || entry->type.is_function()) {
+        type = Register::Type::Ptr;
+    } else {
+        type = Register::Type::Int;
+    }
+    auto identifier = entry->identifier;
+    auto findId = [](auto &&id){
+        return [&id](auto &&reg) {
+            return reg.second.back().name == id;
+        };
+    };
+    if (std::ranges::find_if(id_reg_map, findId(entry->identifier)) != id_reg_map.end()) {
+        int count = 0;
+        std::string newId = entry->identifier + "." + std::to_string(count);
+        while (std::ranges::find_if(id_reg_map, findId(newId)) != id_reg_map.end()) {
+            count++;
+            newId = identifier + "." + std::to_string(count);
+        }
+        identifier = newId;
+    }
+    const auto destReg = Register(identifier, type, entry->type.get_size());
+    current_block->add_instruction(MoveInst(destReg, exprReg));
+    id_reg_map[entry].push_back(destReg);
+}
+
+void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
+    const Register exprReg = lower_expression(stmt->get_condition());
+    Block *thenBlock = current_function->add_block(function_counter++);
+    Block *elseBlock;
+    if (stmt->has_else()) {
+        elseBlock = current_function->add_block(function_counter++);
+    }
+    Block *afterCondition = current_function->add_block(function_counter++);
+    thenBlock->is_dominated_by(current_block);
+    // TODO: Handle conditional blocks correctly
+    if (stmt->has_else()) {
+        current_block->add_instruction(BreakInst(exprReg, elseBlock->get_label()));
+        elseBlock->is_dominated_by(current_block);
+    } else {
+        current_block->add_instruction(BreakInst(exprReg, afterCondition->get_label()));
+        afterCondition->is_dominated_by(current_block);
+    }
+
+    current_block = thenBlock;
+    lower_statement(stmt->get_then());
+    afterCondition->is_dominated_by(current_block);
+    if (stmt->has_else()) {
+        current_block->add_instruction(JumpInst(afterCondition->get_label()));
+        current_block = elseBlock;
+        lower_statement(stmt->get_else());
+        afterCondition->is_dominated_by(current_block);
+    }
+
+    current_block = afterCondition;
+}
+
+IR::Register IR::IRContext::lower_expression(const Expression *expr) {
     if (auto *binOp = dyn_cast<BinOp>(expr)) {
         return lower_binary_op(binOp);
     }
     if (auto *idNode = dyn_cast<Identifier>(expr)) {
         return lower_identifier(idNode);
     }
+    if (auto *constantNode = dyn_cast<Constant>(expr)) {
+        return lower_constant(constantNode);
+    }
+    throw std::runtime_error("Not implemented");
 }
 
-IR::Register IR::IRContext::lower_binary_op(BinOp *binOp) {
+IR::Register IR::IRContext::lower_binary_op(const BinOp *binOp) {
     auto source1 = lower_expression(binOp->get_lhs());
     auto source2 = lower_expression(binOp->get_rhs());
-    auto destReg = get_next_reg();
+    auto destReg = get_next_temp_reg();
     ArithInst::Operation operation;
     switch (binOp->get_operation()) {
         case BinOp::EQUAL:
@@ -110,18 +191,44 @@ IR::Register IR::IRContext::lower_binary_op(BinOp *binOp) {
     return destReg;
 }
 
-IR::Register IR::IRContext::lower_identifier(Identifier *idNode) {
-    std::string id = idNode->get_value();
+IR::Register IR::IRContext::lower_identifier(const Identifier *idNode) {
+    const std::string& id = idNode->get_value();
     auto type = idNode->get_type_info();
+
     if (Sema::is_scalar_type(type.type)) {
-        if (id_reg_map.contains(id)) {
-            return id_reg_map.at(id).back();
+        if (id_reg_map.contains(idNode->get_symbol_entry())) {
+            return id_reg_map.at(idNode->get_symbol_entry()).back();
         }
 
         if (globals.contains(id)) {
             return load_global_value(id);
         }
     }
+    throw std::runtime_error("Not implemented");
+}
+
+bool parse_int(const std::string& str, int& output) {
+    try {
+        // Ensure full string is used in converting to a number
+        size_t pos;
+        output = std::stoi(str, &pos, 10);
+        if (pos != str.length()) {
+            return false;
+        }
+        return true;
+    } catch ([[maybe_unused]] std::invalid_argument& e) {
+        return false;
+    }
+}
+
+IR::Register IR::IRContext::lower_constant(const Constant *constantNode) {
+    auto &valueStr = constantNode->get_value();
+    // TODO: Need better constant parsing
+    int value;
+    parse_int(valueStr,value);
+    Register destReg = get_next_temp_reg();
+    current_block->add_instruction(LoadImmInst(destReg, value));
+    return destReg;
 }
 
 IR::Global * IR::IRContext::add_global(const std::string& identifier, MemSize size) {
@@ -131,13 +238,24 @@ IR::Global * IR::IRContext::add_global(const std::string& identifier, MemSize si
 
 IR::Register IR::IRContext::load_global_value(const std::string &identifier) {
     const auto global = globals.at(identifier).get();
-    const auto labelReg = get_next_reg();
-    const auto valueReg = get_next_reg();
+    const auto labelReg = get_next_temp_reg();
+    const auto valueReg = get_next_temp_reg();
     current_block->add_instruction(LoadLabelInst(labelReg, global->label));
     current_block->add_instruction(LoadInst(valueReg, labelReg));
     return valueReg;
 }
 
-IR::Register IR::IRContext::get_next_reg() {
-    return reg_counter++;
+IR::Register IR::IRContext::get_next_temp_reg(const Register::Type type, const MemSize size) {
+    return {std::to_string(temp_reg_counter++), type, size};
+}
+
+std::ostream & IR::operator<<(std::ostream &os, const IRContext &ctx) {
+    for (const auto &global: ctx.globals | std::views::values) {
+        os << *global << std::endl;
+    }
+    os << std::endl;
+    for (const auto & function : ctx.functions) {
+        os << *function << std::endl;
+    }
+    return os;
 }

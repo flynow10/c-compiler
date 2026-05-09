@@ -1951,10 +1951,21 @@ namespace AST {
 
     class Identifier: public Expression {
         std::string identifier;
+
+        // Semantic analysis
+        const Entry *symbol_entry = nullptr;
     public:
         Identifier() : Expression(NK_Identifier) {}
         [[nodiscard]] const std::string &get_value() const {
             return identifier;
+        }
+
+        void set_symbol_entry(const Entry *entry) {
+            this->symbol_entry = entry;
+        }
+
+        [[nodiscard]] const Entry *get_symbol_entry() const {
+            return this->symbol_entry;
         }
 
         static unique_ptr<Identifier> create(std::string identifier) {

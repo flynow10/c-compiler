@@ -1,13 +1,10 @@
-struct A;
-
-struct A test;
-
-struct A {
-    int a;
-};
-
 int main(int argc, char* argv[]) {
-    int a = 7;
-    int b = 3;
-    return a + b;
+    int a = 0;
+    if (a) {
+        int b = 1;
+    } else {
+        int a = 3;
+        return a;
+    }
+    return a;
 }

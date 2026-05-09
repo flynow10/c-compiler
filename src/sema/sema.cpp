@@ -237,7 +237,9 @@ Entry *Sema::accept_init_declarator(InitDeclarator *initDeclarator, const QualTy
             accept_initializer_list(initializerList, entry.type.type);
         }
     }
-    return local_table->addSymbol(entry);
+    auto *entryPtr = local_table->addSymbol(entry);
+    initDeclarator->set_symbol_entry(entryPtr);
+    return entryPtr;
 }
 
 void Sema::accept_initializer_list(InitializerList *initializerList, Type *structOrRef) {
