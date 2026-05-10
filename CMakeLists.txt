@@ -38,6 +38,7 @@ add_executable(c_compiler src/main.cpp
         src/ir/global.cpp
         src/ir/global.hpp
         src/ir/types.hpp
+        src/ir/types.cpp
 )
 add_executable(c_compiler_test test/main.cpp
         test/execute.cpp

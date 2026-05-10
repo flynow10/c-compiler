@@ -31,7 +31,7 @@ IR::Label IR::Block::get_label() const {
 }
 
 std::ostream & IR::operator<<(std::ostream &os, const Block &block) {
-    os << "\t@" << block.label << ": (precedes";
+    os << "@" << block.label << ": (precedes";
     for (const auto & next : block.next) {
         os << " @" << next->label;
     }

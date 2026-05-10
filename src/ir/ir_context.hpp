@@ -32,7 +32,7 @@ namespace IR {
         std::unordered_map<const Entry *, std::vector<Register>> id_reg_map;
 
     public:
-        [[nodiscard]] const size_t get_num_functions() const;
+        [[nodiscard]] size_t get_num_functions() const;
         [[nodiscard]] const Function * get_function(size_t index) const;
 
     public:
@@ -40,6 +40,9 @@ namespace IR {
         void lower_globals(const AST::TranslationUnit * ast);
         void lower_function(const AST::FunctionDecl *decl);
         void lower_statement(const AST::Statement *stmt);
+
+        std::string get_next_available_reg_name(const std::string &identifier);
+
         void lower_init_decl(const AST::InitDeclarator *initDecl);
         void lower_control(const AST::ControlStatement *controlStmt);
         void lower_selection(const AST::SelectionStatement *stmt);
@@ -47,15 +50,15 @@ namespace IR {
         void lower_do(const AST::DoStatement *stmt);
         void lower_for(const AST::ForStatement *stmt);
 
-        Register lower_condition(const AST::Expression *expr);
-        Register lower_expression(const AST::Expression *expr);
-        Register lower_assignment(const AST::Assignment *assignment);
-        Register lower_binary_op(const AST::BinOp *bin_op);
-        Register lower_unary_op(const AST::UnaryOp *unary_op);
-        Register lower_post_assignment(const AST::PostAssignment *assignment);
-        Register lower_identifier(const AST::Identifier *idNod);
-        Register lower_constant(const AST::Constant *constantNode);
-        Register lower_function_call(const AST::FunctionCall *functionCall);
+        RegOrImmediate lower_condition(const AST::Expression *expr);
+        RegOrImmediate lower_expression(const AST::Expression *expr);
+        RegOrImmediate lower_assignment(const AST::Assignment *assignment);
+        RegOrImmediate lower_binary_op(const AST::BinOp *bin_op);
+        RegOrImmediate lower_unary_op(const AST::UnaryOp *unary_op);
+        RegOrImmediate lower_post_assignment(const AST::PostAssignment *assignment);
+        RegOrImmediate lower_identifier(const AST::Identifier *idNode);
+        RegOrImmediate lower_constant(const AST::Constant *constantNode);
+        RegOrImmediate lower_function_call(const AST::FunctionCall *functionCall);
 
         Global *add_global(const std::string& identifier, MemSize size);
         Register load_global_value(const std::string& identifier);

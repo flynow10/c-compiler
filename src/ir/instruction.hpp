@@ -15,14 +15,12 @@ namespace IR {
         IT_COMPARE,
         IT_UNARY,
         IT_MOVE,
-        IT_LOAD_LABEL,
-        IT_LOAD_IMM,
+        IT_ALLOCATE,
         IT_LOAD,
         IT_STORE,
         IT_JUMP,
         IT_BREAK,
         IT_CALL,
-        IT_CALL_PTR,
         IT_RETURN,
     };
 
@@ -32,6 +30,7 @@ namespace IR {
     public:
         explicit Instruction(InstructionType type) : type(type) {
         }
+        Instruction(const Instruction &inst) = default;
 
         virtual ~Instruction() = default;
 
@@ -58,11 +57,12 @@ namespace IR {
         };
 
     private:
-        Register dest, source1, source2;
-        Operation op;
+        const Register dest;
+        const std::unique_ptr<InstArgument> source1, source2;
+        const Operation op;
 
     public:
-        ArithInst(Register dest, Register source1, Register source2,
+        ArithInst(Register dest, std::unique_ptr<InstArgument> source1, std::unique_ptr<InstArgument> source2,
                   const Operation op) : Instruction(InstructionType::IT_ARITH),
                                         dest(std::move(dest)),
                                         source1(std::move(source1)),
@@ -73,12 +73,12 @@ namespace IR {
             return dest;
         }
 
-        [[nodiscard]] const Register &get_source1() const {
-            return source1;
+        [[nodiscard]] const InstArgument *get_source1() const {
+            return source1.get();
         }
 
-        [[nodiscard]] const Register &get_source2() const {
-            return source2;
+        [[nodiscard]] const InstArgument *get_source2() const {
+            return source2.get();
         }
 
         [[nodiscard]] Operation get_operation() const {
@@ -89,6 +89,11 @@ namespace IR {
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_ARITH;
+        }
+
+        static std::unique_ptr<ArithInst> create(Register dest, std::unique_ptr<InstArgument> source1, std::unique_ptr<InstArgument> source2,
+                  const Operation op) {
+            return std::make_unique<ArithInst>(std::move(dest), std::move(source1), std::move(source2), op);
         }
     };
 
@@ -108,11 +113,12 @@ namespace IR {
         };
 
     private:
-        const Register dest, source1, source2;
+        const Register dest;
+        std::unique_ptr<InstArgument> source1, source2;
         const Operation op;
 
     public:
-        CompareInst(Register dest, Register source1, Register source2, Operation op) : Instruction(
+        CompareInst(Register dest, std::unique_ptr<InstArgument> source1, std::unique_ptr<InstArgument> source2, Operation op) : Instruction(
                 InstructionType::IT_COMPARE), dest(std::move(dest)), source1(std::move(source1)),
             source2(std::move(source2)), op(op) {
         }
@@ -121,12 +127,12 @@ namespace IR {
             return dest;
         }
 
-        [[nodiscard]] const Register &get_source1() const {
-            return source1;
+        [[nodiscard]] InstArgument *get_source1() const {
+            return source1.get();
         }
 
-        [[nodiscard]] const Register &get_source2() const {
-            return source2;
+        [[nodiscard]] InstArgument *get_source2() const {
+            return source2.get();
         }
 
         [[nodiscard]] Operation get_operation() const {
@@ -138,6 +144,10 @@ namespace IR {
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_COMPARE;
         }
+
+        static std::unique_ptr<CompareInst> create(Register dest, std::unique_ptr<InstArgument> source1, std::unique_ptr<InstArgument> source2, Operation op) {
+            return std::make_unique<CompareInst>(std::move(dest), std::move(source1), std::move(source2), op);
+        }
     };
 
     class UnaryInst : public Instruction {
@@ -148,13 +158,26 @@ namespace IR {
         };
 
     private:
-        Register dest, source;
-        Operation op;
+        const Register dest;
+        const std::unique_ptr<InstArgument> source;
+        const Operation op;
 
     public:
-        UnaryInst(Register dest, Register source, const Operation op) : Instruction(InstructionType::IT_UNARY),
+        UnaryInst(Register dest, std::unique_ptr<InstArgument>source, const Operation op) : Instruction(InstructionType::IT_UNARY),
                                                                         dest(std::move(dest)),
                                                                         source(std::move(source)), op(op) {
+        }
+
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] InstArgument *get_source() const {
+            return source.get();
+        }
+
+        [[nodiscard]] Operation get_operation() const {
+            return op;
         }
 
         [[nodiscard]] std::string print() const override;
@@ -162,76 +185,62 @@ namespace IR {
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_UNARY;
         }
+
+        static std::unique_ptr<UnaryInst> create(Register dest, std::unique_ptr<InstArgument> source, Operation op) {
+            return std::make_unique<UnaryInst>(std::move(dest), std::move(source), op);
+        }
     };
 
-    class MoveInst : public Instruction {
-        const Register dest, source;
+    /**
+     * Allocates space on the stack for the destination register.
+     * The destination register must be of type pointer
+     * @param size the number of bytes to allocate
+     */
+    class AllocateInst : public Instruction {
+        const Register dest;
+        const size_t size;
 
     public:
-        MoveInst(Register dest, Register source) : Instruction(InstructionType::IT_MOVE), dest(dest), source(source) {
-        }
+        AllocateInst(Register dest, size_t size) : Instruction(InstructionType::IT_ALLOCATE), dest(std::move(dest)), size(size) {}
 
         [[nodiscard]] const Register &get_dest() const {
             return dest;
         }
 
-        [[nodiscard]] const Register &get_source() const {
-            return source;
+        [[nodiscard]] const size_t &get_size() const {
+            return size;
         }
 
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
-            return inst->get_type() == InstructionType::IT_MOVE;
+            return inst->get_type() == InstructionType::IT_ALLOCATE;
+        }
+
+        static std::unique_ptr<AllocateInst> create(Register dest, size_t size) {
+            return std::make_unique<AllocateInst>(std::move(dest), size);
         }
     };
 
-    class LoadLabelInst : public Instruction {
-        const Register dest;
-        Label label = 0;
-
-    public:
-        LoadLabelInst(Register dest, Label label) : Instruction(InstructionType::IT_LOAD_LABEL), dest(dest),
-                                                    label(label) {
-        };
-
-        [[nodiscard]] std::string print() const override;
-
-        static bool classof(const Instruction *inst) {
-            return inst->get_type() == InstructionType::IT_LOAD_LABEL;
-        }
-    };
-
-    class LoadImmInst : public Instruction {
-        const Register dest;
-        size_t value;
-
-    public:
-        LoadImmInst(Register dest, size_t value) : Instruction(InstructionType::IT_LOAD_IMM), dest(dest), value(value) {
-        }
-
-        [[nodiscard]] const Register &get_dest() const {
-            return dest;
-        }
-
-        [[nodiscard]] size_t get_value() const {
-            return value;
-        }
-
-        [[nodiscard]] std::string print() const override;
-
-        static bool classof(const Instruction *inst) {
-            return inst->get_type() == InstructionType::IT_LOAD_IMM;
-        }
-    };
-
+    /**
+     * Loads from memory the value stored in the source ptr.
+     * @param source must be of type ptr
+     */
     class LoadInst : public Instruction {
-        const Register dest, source;
-        const MemOffset offset;
+        const Register dest;
+        const std::unique_ptr<InstArgument> source;
 
     public:
-        LoadInst(const Register dest, const Register source, const MemOffset offset = 0) : Instruction(
-            InstructionType::IT_LOAD), dest(dest), source(source), offset(offset) {
+        LoadInst(Register dest, std::unique_ptr<InstArgument> source) : Instruction(
+            InstructionType::IT_LOAD), dest(std::move(dest)), source(std::move(source)) {
+        }
+
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] InstArgument *get_source() const {
+            return source.get();
         }
 
         [[nodiscard]] std::string print() const override;
@@ -239,27 +248,55 @@ namespace IR {
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_LOAD;
         }
+
+        static std::unique_ptr<LoadInst> create(Register dest, std::unique_ptr<InstArgument> source) {
+            return std::make_unique<LoadInst>(std::move(dest), std::move(source));
+        }
     };
 
+    /**
+     * Stores in memory the value specified by source
+     * @param dest must be of type ptr
+     */
     class StoreInst : public Instruction {
+        const Register dest;
+        const std::unique_ptr<InstArgument> source;
     public:
-        StoreInst() : Instruction(InstructionType::IT_STORE) {
+        StoreInst(Register dest, std::unique_ptr<InstArgument> source) : Instruction(InstructionType::IT_STORE), dest(std::move(dest)), source(std::move(source)) {
         }
+
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] InstArgument *get_source() const {
+            return source.get();
+        }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_STORE;
         }
+
+        static std::unique_ptr<StoreInst> create(Register dest, std::unique_ptr<InstArgument> source) {
+            return std::make_unique<StoreInst>(std::move(dest), std::move(source));
+        }
     };
 
+    /**
+     * Jumps to the given label or pointer
+     * @param jump_point must be either a label or a register of type ptr
+     */
     class JumpInst : public Instruction {
-        const Label label;
+        const std::unique_ptr<InstArgument> jump_point;
 
     public:
-        explicit JumpInst(const Label label) : Instruction(InstructionType::IT_JUMP), label(label) {
+        explicit JumpInst(std::unique_ptr<InstArgument> jumpPoint) : Instruction(InstructionType::IT_JUMP), jump_point(std::move(jumpPoint)) {
         }
 
-        [[nodiscard]] Label get_label() const {
-            return label;
+        [[nodiscard]] InstArgument *get_jump_point() const {
+            return jump_point.get();
         }
 
         [[nodiscard]] std::string print() const override;
@@ -267,24 +304,30 @@ namespace IR {
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_JUMP;
         }
+
+        static std::unique_ptr<JumpInst> create(std::unique_ptr<InstArgument> jumpPoint) {
+            return std::make_unique<JumpInst>(std::move(jumpPoint));
+        }
     };
 
-
+    /**
+     * Conditionally branches to the jump point the condition register has a value of zero
+     * @param branch_point must be a label or a register of type ptr
+     */
     class BranchInst : public Instruction {
-        const Register condition;
-        const Label label;
+        const std::unique_ptr<InstArgument> condition, branch_point;
 
     public:
-        BranchInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK),
-                                                            condition(std::move(condition)), label(label) {
+        BranchInst(std::unique_ptr<InstArgument> condition, std::unique_ptr<InstArgument> branchPoint) : Instruction(InstructionType::IT_BREAK),
+                                                            condition(std::move(condition)), branch_point(std::move(branchPoint)) {
         }
 
-        [[nodiscard]] const Register &get_condition() const {
-            return condition;
+        [[nodiscard]] InstArgument *get_condition() const {
+            return condition.get();
         }
 
-        [[nodiscard]] const Label &get_label() const {
-            return label;
+        [[nodiscard]] InstArgument *get_label() const {
+            return branch_point.get();
         }
 
         [[nodiscard]] std::string print() const override;
@@ -292,47 +335,27 @@ namespace IR {
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_BREAK;
         }
+
+        static std::unique_ptr<BranchInst> create(std::unique_ptr<InstArgument> condition, std::unique_ptr<InstArgument> branchPoint) {
+            return std::make_unique<BranchInst>(std::move(condition), std::move(branchPoint));
+        }
     };
 
+    /**
+     * Call a function at the given ptr
+     * @param func_ptr must be either a @link FunctionPtrArgument or a Register of type ptr
+     */
     class CallInst : public Instruction {
+    public:
+        using CallArgs = std::vector<std::unique_ptr<InstArgument>>;
+    private:
         const Register dest;
-        const std::string identifier;
-        const std::vector<Register> args;
+        const std::unique_ptr<InstArgument> func_ptr;
+        const CallArgs args;
 
     public:
-        CallInst(Register dest, std::string identifier, std::vector<Register> args) : Instruction(
+        CallInst(Register dest, std::unique_ptr<InstArgument> funcPtr, CallArgs args) : Instruction(
                 InstructionType::IT_CALL), dest(std::move(dest)),
-            identifier(std::move(identifier)),
-            args(std::move(args)) {
-        }
-
-        [[nodiscard]] const Register &get_dest() const {
-            return dest;
-        }
-
-        [[nodiscard]] const std::string &get_identifier() const {
-            return identifier;
-        }
-
-        [[nodiscard]] const std::vector<Register> &get_args() const {
-            return args;
-        }
-
-        [[nodiscard]] std::string print() const override;
-
-        static bool classof(const Instruction *inst) {
-            return inst->get_type() == InstructionType::IT_CALL;
-        }
-    };
-
-    class CallPtrInst : public Instruction {
-        const Register dest;
-        const Register func_ptr;
-        const std::vector<Register> args;
-
-    public:
-        CallPtrInst(Register dest, Register funcPtr, std::vector<Register> args) : Instruction(
-                InstructionType::IT_CALL_PTR), dest(std::move(dest)),
             func_ptr(std::move(funcPtr)),
             args(std::move(args)) {
         }
@@ -341,33 +364,45 @@ namespace IR {
             return dest;
         }
 
-        [[nodiscard]] const Register &get_func_ptr() const {
-            return func_ptr;
+        [[nodiscard]] InstArgument *get_func_ptr() const {
+            return func_ptr.get();
         }
 
-        [[nodiscard]] const std::vector<Register> &get_args() const {
+        [[nodiscard]] const CallArgs &get_args() const {
             return args;
         }
 
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
-            return inst->get_type() == InstructionType::IT_CALL_PTR;
+            return inst->get_type() == InstructionType::IT_CALL;
+        }
+
+        static std::unique_ptr<CallInst> create(Register dest, std::unique_ptr<InstArgument> func_ptr, CallArgs args) {
+            return std::make_unique<CallInst>(std::move(dest), std::move(func_ptr), std::move(args));
         }
     };
 
     class ReturnInst : public Instruction {
-        Register return_value;
+        std::unique_ptr<InstArgument> return_value;
 
     public:
-        ReturnInst(Register returnValue) : Instruction(InstructionType::IT_RETURN),
+        ReturnInst(std::unique_ptr<InstArgument> returnValue) : Instruction(InstructionType::IT_RETURN),
                                            return_value(std::move(returnValue)) {
+        }
+
+        [[nodiscard]] InstArgument *get_return_value() const {
+            return return_value.get();
         }
 
         [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_RETURN;
+        }
+
+        static std::unique_ptr<ReturnInst> create(std::unique_ptr<InstArgument> returnValue) {
+            return std::make_unique<ReturnInst>(std::move(returnValue));
         }
     };
 }

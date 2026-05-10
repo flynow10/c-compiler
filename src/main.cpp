@@ -81,8 +81,8 @@ int main(const int argc, char *argv[]) {
     }
     *output << context;
 
-    RISCVTarget target(*output);
-    target.gen(context);
+    // RISCVTarget target(*output);
+    // target.gen(context);
 
     if (outputFile.is_open()) {
         outputFile.close();

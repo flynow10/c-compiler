@@ -85,10 +85,9 @@ size_t Type::get_size() const {
             return 2;
         case PrimitiveType::Int:
         case PrimitiveType::UnsignedInt:
-            return 4;
         case PrimitiveType::Long:
         case PrimitiveType::UnsignedLong:
-            return 8;
+            return 4;
         default:
             throw std::runtime_error{"Could not get size of type"};
     }

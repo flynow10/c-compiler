@@ -1,35 +1,11 @@
-.text
-main:
-	addi sp, sp, -4
-	sw ra, 0(sp)
-	mv t0, sp
-	addi sp, sp, -4
-	sw t0, 0(sp)
-.L_main_0:
-	addi sp, sp, -4
-	li t0, 12
-	sw t0, 0(sp)
-	addi sp, sp, -4
-	lw t0, 4(sp)
-	sw t0, 0(sp)
-	addi sp, sp, -4
-	li t0, 10
-	sw t0, 0(sp)
-	addi sp, sp, -4
-	lw t0, 4(sp)
-	sw t0, 0(sp)
-	lw t1, 8(sp)
-	lw t2, 0(sp)
-	add t0, t1, t2
-	addi sp, sp, -4
-	sw t0, 0(sp)
-	addi sp, sp, -4
-	lw t0, 4(sp)
-	sw t0, 0(sp)
-	lw t0, 0(sp)
-	addi sp, sp, 4
-	mv sp, t0
-	lw ra, 0(sp)
-	addi sp, sp, 4
-	ret
-
+fn %main() {
+@0:
+    ptr $a = allocate 4
+    store i32 4 at ptr $a
+    ptr $b = allocate 4
+    store i32 4 at ptr $b
+    i32 $0 = load ptr $a
+    i32 $1 = load ptr $b
+    i32 $2 = add i32 $0, i32 $1
+    ret i32 $2
+}

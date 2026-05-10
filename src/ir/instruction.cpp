@@ -42,7 +42,7 @@ std::string IR::ArithInst::print() const {
             break;
     }
 
-    ss << " " << source1 << ", " << source2 << std::endl;
+    ss << " " << *source1 << ", " << *source2 << std::endl;
     return ss.str();
 }
 
@@ -81,7 +81,7 @@ std::string IR::CompareInst::print() const {
             ss << "uge";
             break;
     }
-    ss << " " << source1 << ", " << source2 << std::endl;
+    ss << " " << *source1 << ", " << *source2 << std::endl;
     return ss.str();
 }
 
@@ -96,72 +96,57 @@ std::string IR::UnaryInst::print() const {
             ss << "negate";
             break;
     }
-    ss << " " << source << std::endl;
+    ss << " " << *source << std::endl;
     return ss.str();
 }
 
-std::string IR::MoveInst::print() const {
+std::string IR::AllocateInst::print() const {
     std::stringstream ss;
-    ss << "\t" << dest << " = mov " << source << std::endl;
-    return ss.str();
-}
-
-std::string IR::LoadLabelInst::print() const {
-    std::stringstream ss;
-    ss << "\t" << dest << " = set @" << label << std::endl;
-    return ss.str();
-}
-
-std::string IR::LoadImmInst::print() const {
-    std::stringstream ss;
-    ss << "\t" << dest << " = 0x" << std::hex << value << std::endl;
+    ss << "\t" << dest << " = allocate " << size * 8 << std::endl;
     return ss.str();
 }
 
 std::string IR::LoadInst::print() const {
     std::stringstream ss;
-    ss << "\t" << dest << " = load " << source << "(" << offset << ")" << std::endl;
+    ss << "\t" << dest << " = load " << *source << std::endl;
+    return ss.str();
+}
+
+std::string IR::StoreInst::print() const {
+    std::stringstream ss;
+    ss << "\tstore " << *source << " at " << dest << std::endl;
     return ss.str();
 }
 
 std::string IR::JumpInst::print() const {
     std::stringstream ss;
-    ss << "\tjmp to @" << label << std::endl;
+    ss << "\tjmp to " << *jump_point << std::endl;
     return ss.str();
 }
 
 std::string IR::BranchInst::print() const {
     std::stringstream ss;
-    ss << "\tbr to @" << label << " if " << condition << " = 0" << std::endl;
+    ss << "\tbr to " << *branch_point << " if " << condition << " = 0" << std::endl;
     return ss.str();
 }
 
 std::ostream &printArgList(std::ostream &os, const std::vector<IR::Register> &args) {
-    for (const auto &arg : args) {
-        os << ", " << arg;
-    }
     return os;
 }
 
 std::string IR::CallInst::print() const {
     std::stringstream ss;
-    ss << "\t" << dest << " = call %" << identifier;
-    printArgList(ss, args);
-    ss << std::endl;
-    return ss.str();
-}
-
-std::string IR::CallPtrInst::print() const {
-    std::stringstream ss;
-    ss << "\t" << dest << " = call " << func_ptr;
-    printArgList(ss, args);
+    ss << "\t" << dest << " = call " << *func_ptr;
+    for (const auto &arg : args) {
+        ss << ", " << *arg;
+    }
     ss << std::endl;
     return ss.str();
 }
 
 std::string IR::ReturnInst::print() const {
     std::stringstream ss;
-    ss << "\tret " << return_value << std::endl;
+    ss << "\tret " << *return_value << std::endl;
     return ss.str();
 }
 

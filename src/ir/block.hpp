@@ -19,7 +19,7 @@ namespace IR {
         explicit Block(const Label label) : label(label) {}
 
         template<typename IType>
-        IType *add_instruction(IType&& inst);
+        IType *add_instruction(std::unique_ptr<IType> inst);
         void is_preceded_by(Block *preceder);
     private:
         void succeeds(Block *successor);
@@ -32,8 +32,10 @@ namespace IR {
     };
 
     template<typename IType>
-    IType * Block::add_instruction(IType &&inst) {
-        return static_cast<IType* >(instructions.emplace_back(std::make_unique<IType>(std::forward<IType>(inst))).get());
+    IType * Block::add_instruction(std::unique_ptr<IType> inst) {
+        auto *raw_ptr = inst.get();
+        instructions.push_back(std::move(inst));
+        return raw_ptr;
     }
 }
 

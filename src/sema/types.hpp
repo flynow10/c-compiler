@@ -285,13 +285,7 @@ struct std::hash<ArrayType> {
 template<>
 struct std::hash<FunctionArg> {
     std::size_t operator()(FunctionArg const &functionArg) const noexcept {
-        size_t result = 0;
-        hash_combine(result, functionArg.type);
-        // TODO: Identifier should not be considered in hash since it prevents comparison between equivalent function types
-        // if (functionArg.is_named) {
-        //     hash_combine(result, functionArg.identifier);
-        // }
-        return result;
+        return std::hash<QualType>{}(functionArg.type);
     }
 };
 

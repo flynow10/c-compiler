@@ -13,9 +13,6 @@ void RISCVTarget::gen_preamble() {
 void RISCVTarget::gen_function(const IR::IRContext &ctx, const IR::Function *function) {
     const auto &functionName = function->get_identifier();
     add_label(functionName);
-    push_reg("ra");
-    add_instruction("mv t0, sp");
-    push_reg("t0");
 
     for (const auto & block : function->get_blocks()) {
         add_label(get_function_label(block->get_label(), functionName));
@@ -23,129 +20,127 @@ void RISCVTarget::gen_function(const IR::IRContext &ctx, const IR::Function *fun
             gen_instruction(ctx, function, instruction.get());
         }
     }
-    pop_reg("t0");
-    add_instruction("mv sp, t0");
-    pop_reg("ra");
+
     add_instruction("ret");
 }
 
 void RISCVTarget::gen_instruction(const IR::IRContext &ctx, const IR::Function *function, const IR::Instruction *instruction) {
-    if (auto *loadImm = dyn_cast<IR::LoadImmInst>(instruction)) {
-        auto dest= get_stack_offset(loadImm->get_dest());
-        add_instruction("li t0, " + std::to_string(loadImm->get_value()));
-        set_reg_on_stack("t0", dest);
-    } else if (auto *arithInst = dyn_cast<IR::ArithInst>(instruction)) {
-        gen_arith_instruction(ctx, arithInst);
-    } else if (auto *moveInst = dyn_cast<IR::MoveInst>(instruction)) {
-        auto dest = get_stack_offset(moveInst->get_dest());
-        auto source = get_stack_offset(moveInst->get_source());
-        load_reg_on_stack("t0", source);
-        set_reg_on_stack("t0", dest);
-        // add_instruction("mv " + dest + ", " + source);
-    } else if (auto *compareInst = dyn_cast<IR::CompareInst>(instruction)) {
-        gen_compare_instruction(ctx, compareInst);
-    } else if (auto *jumpInst = dyn_cast<IR::JumpInst>(instruction)) {
-        auto label = get_function_label(jumpInst->get_label(), function->get_identifier());
-        add_instruction("j " + label);
-    } else if (auto *branchInst = dyn_cast<IR::BranchInst>(instruction)) {
-        auto label = get_function_label(branchInst->get_label(), function->get_identifier());
-        auto branchReg = get_stack_offset(branchInst->get_condition());
-        load_reg_on_stack("t0", branchReg);
-        add_instruction("beqz t0, " + label);
-    }
+    // if (auto *loadImm = dyn_cast<IR::LoadImmInst>(instruction)) {
+    //     auto dest= get_stack_offset(loadImm->get_dest());
+    //     add_instruction("li t0, " + std::to_string(loadImm->get_value()));
+    //     set_reg_on_stack("t0", dest);
+    // } else if (auto *arithInst = dyn_cast<IR::ArithInst>(instruction)) {
+    //     gen_arith_instruction(ctx, arithInst);
+    // } else if (auto *moveInst = dyn_cast<IR::MoveInst>(instruction)) {
+    //     auto dest = get_stack_offset(moveInst->get_dest());
+    //     auto source = get_stack_offset(moveInst->get_source());
+    //     load_reg_on_stack("t0", source);
+    //     set_reg_on_stack("t0", dest);
+    //     // add_instruction("mv " + dest + ", " + source);
+    // } else if (auto *compareInst = dyn_cast<IR::CompareInst>(instruction)) {
+    //     gen_compare_instruction(ctx, compareInst);
+    // } else if (auto *jumpInst = dyn_cast<IR::JumpInst>(instruction)) {
+    //     auto label = get_function_label(jumpInst->get_label(), function->get_identifier());
+    //     add_instruction("j " + label);
+    // } else if (auto *branchInst = dyn_cast<IR::BranchInst>(instruction)) {
+    //     auto label = get_function_label(branchInst->get_label(), function->get_identifier());
+    //     auto branchReg = get_stack_offset(branchInst->get_condition());
+    //     load_reg_on_stack("t0", branchReg);
+    //     add_instruction("beqz t0, " + label);
+    // }
 }
 
 void RISCVTarget::gen_arith_instruction(const IR::IRContext &ctx, const IR::ArithInst *arithInst) {
-    std::string operation;
-    std::string outputReg = "t0";
-    // std::string outputReg = get_or_allocate(arithInst->get_dest());
-    load_reg_on_stack("t1", get_stack_offset(arithInst->get_source1()));
-    load_reg_on_stack("t2", get_stack_offset(arithInst->get_source2()));
-    switch (arithInst->get_operation()) {
-        case IR::ArithInst::Operation::ADD:
-            operation = "add";
-            break;
-        case IR::ArithInst::Operation::SUBTRACT:
-            operation = "sub";
-            break;
-        case IR::ArithInst::Operation::MULTIPLY:
-            operation = "mul";
-            break;
-        case IR::ArithInst::Operation::DIVIDE:
-            operation = "div";
-            break;
-        case IR::ArithInst::Operation::MODULO:
-            operation = "rem";
-            break;
-        case IR::ArithInst::Operation::SHIFT_LEFT:
-            operation = "sll";
-            break;
-        case IR::ArithInst::Operation::SHIFT_RIGHT:
-            operation = "sra";
-            break;
-        case IR::ArithInst::Operation::AND:
-            operation = "and";
-            break;
-        case IR::ArithInst::Operation::OR:
-            operation = "or";
-            break;
-        case IR::ArithInst::Operation::XOR:
-            operation = "xor";
-            break;
-    }
-    add_instruction(operation + " t0, t1, t2");
-    set_reg_on_stack("t0", get_stack_offset(arithInst->get_dest()));
+    // std::string operation;
+    // std::string outputReg = "t0";
+    // // std::string outputReg = get_or_allocate(arithInst->get_dest());
+    // load_reg_on_stack("t1", get_stack_offset(arithInst->get_source1()));
+    // load_reg_on_stack("t2", get_stack_offset(arithInst->get_source2()));
+    // switch (arithInst->get_operation()) {
+    //     case IR::ArithInst::Operation::ADD:
+    //         operation = "add";
+    //         break;
+    //     case IR::ArithInst::Operation::SUBTRACT:
+    //         operation = "sub";
+    //         break;
+    //     case IR::ArithInst::Operation::MULTIPLY:
+    //         operation = "mul";
+    //         break;
+    //     case IR::ArithInst::Operation::DIVIDE:
+    //         operation = "div";
+    //         break;
+    //     case IR::ArithInst::Operation::MODULO:
+    //         operation = "rem";
+    //         break;
+    //     case IR::ArithInst::Operation::SHIFT_LEFT:
+    //         operation = "sll";
+    //         break;
+    //     case IR::ArithInst::Operation::SHIFT_RIGHT:
+    //         operation = "sra";
+    //         break;
+    //     case IR::ArithInst::Operation::AND:
+    //         operation = "and";
+    //         break;
+    //     case IR::ArithInst::Operation::OR:
+    //         operation = "or";
+    //         break;
+    //     case IR::ArithInst::Operation::XOR:
+    //         operation = "xor";
+    //         break;
+    // }
+    // add_instruction(operation + " t0, t1, t2");
+    // set_reg_on_stack("t0", get_stack_offset(arithInst->get_dest()));
 }
 
 void RISCVTarget::gen_compare_instruction(const IR::IRContext &ctx, const IR::CompareInst *compareInst) {
-    std::string dest = "t0";
-    std::string source1 = "t1";
-    std::string source2 = "t2";
-    // std::string outputReg = get_or_allocate(arithInst->get_dest());
-    load_reg_on_stack("t1", get_stack_offset(compareInst->get_source1()));
-    load_reg_on_stack("t2", get_stack_offset(compareInst->get_source2()));
-    // auto dest = get_or_allocate(compareInst->get_dest());
-    // auto source1 = find_register(compareInst->get_source1());
-    // auto source2 = find_register(compareInst->get_source2());
-    switch (compareInst->get_operation()) {
-        case IR::CompareInst::Operation::EQUAL:
-            add_instruction("xor " + dest + ", " + source1 + ", " + source2);
-            add_instruction("seqz " + dest + ", " + dest);
-            break;
-        case IR::CompareInst::Operation::NOT_EQUAL:
-            add_instruction("xor " + dest + ", " + source1 + ", " + source2);
-            add_instruction("snez " + dest + ", " + dest);
-            break;
-        case IR::CompareInst::Operation::LESS_THAN:
-            add_instruction("slt " + dest + ", " + source1 + ", " + source2);
-            break;
-        case IR::CompareInst::Operation::LESS_THAN_EQUAL:
-            add_instruction("slt " + dest + ", " + source1 + ", " + source2);
-            add_instruction("xori " + dest + ", " + dest + ", 1");
-            break;
-        case IR::CompareInst::Operation::GREATER_THAN:
-            add_instruction("sgt " + dest + ", " + source1 + ", " + source2);
-            break;
-        case IR::CompareInst::Operation::GREATER_THAN_EQUAL:
-            add_instruction("sgt " + dest + ", " + source1 + ", " + source2);
-            add_instruction("xori " + dest + ", " + dest + ", 1");
-            break;
-        case IR::CompareInst::Operation::LESS_THAN_UNSIGNED:
-            add_instruction("sltu " + dest + ", " + source1 + ", " + source2);
-            break;
-        case IR::CompareInst::Operation::LESS_THAN_EQUAL_UNSIGNED:
-            add_instruction("sltu " + dest + ", " + source1 + ", " + source2);
-            add_instruction("xori " + dest + ", " + dest + ", 1");
-            break;
-        case IR::CompareInst::Operation::GREATER_THAN_UNSIGNED:
-            add_instruction("sgtu " + dest + ", " + source1 + ", " + source2);
-            break;
-        case IR::CompareInst::Operation::GREATER_THAN_EQUAL_UNSIGNED:
-            add_instruction("sgtu " + dest + ", " + source1 + ", " + source2);
-            add_instruction("xori " + dest + ", " + dest + ", 1");
-            break;
-    }
-    set_reg_on_stack("t0", get_stack_offset(compareInst->get_dest()));
+    // std::string dest = "t0";
+    // std::string source1 = "t1";
+    // std::string source2 = "t2";
+    // // std::string outputReg = get_or_allocate(arithInst->get_dest());
+    // load_reg_on_stack("t1", get_stack_offset(compareInst->get_source1()));
+    // load_reg_on_stack("t2", get_stack_offset(compareInst->get_source2()));
+    // // auto dest = get_or_allocate(compareInst->get_dest());
+    // // auto source1 = find_register(compareInst->get_source1());
+    // // auto source2 = find_register(compareInst->get_source2());
+    // switch (compareInst->get_operation()) {
+    //     case IR::CompareInst::Operation::EQUAL:
+    //         add_instruction("xor " + dest + ", " + source1 + ", " + source2);
+    //         add_instruction("seqz " + dest + ", " + dest);
+    //         break;
+    //     case IR::CompareInst::Operation::NOT_EQUAL:
+    //         add_instruction("xor " + dest + ", " + source1 + ", " + source2);
+    //         add_instruction("snez " + dest + ", " + dest);
+    //         break;
+    //     case IR::CompareInst::Operation::LESS_THAN:
+    //         add_instruction("slt " + dest + ", " + source1 + ", " + source2);
+    //         break;
+    //     case IR::CompareInst::Operation::LESS_THAN_EQUAL:
+    //         add_instruction("slt " + dest + ", " + source1 + ", " + source2);
+    //         add_instruction("xori " + dest + ", " + dest + ", 1");
+    //         break;
+    //     case IR::CompareInst::Operation::GREATER_THAN:
+    //         add_instruction("sgt " + dest + ", " + source1 + ", " + source2);
+    //         break;
+    //     case IR::CompareInst::Operation::GREATER_THAN_EQUAL:
+    //         add_instruction("sgt " + dest + ", " + source1 + ", " + source2);
+    //         add_instruction("xori " + dest + ", " + dest + ", 1");
+    //         break;
+    //     case IR::CompareInst::Operation::LESS_THAN_UNSIGNED:
+    //         add_instruction("sltu " + dest + ", " + source1 + ", " + source2);
+    //         break;
+    //     case IR::CompareInst::Operation::LESS_THAN_EQUAL_UNSIGNED:
+    //         add_instruction("sltu " + dest + ", " + source1 + ", " + source2);
+    //         add_instruction("xori " + dest + ", " + dest + ", 1");
+    //         break;
+    //     case IR::CompareInst::Operation::GREATER_THAN_UNSIGNED:
+    //         add_instruction("sgtu " + dest + ", " + source1 + ", " + source2);
+    //         break;
+    //     case IR::CompareInst::Operation::GREATER_THAN_EQUAL_UNSIGNED:
+    //         add_instruction("sgtu " + dest + ", " + source1 + ", " + source2);
+    //         add_instruction("xori " + dest + ", " + dest + ", 1");
+    //         break;
+    // }
+    // set_reg_on_stack("t0", get_stack_offset(compareInst->get_dest()));
 }
 
 std::string RISCVTarget::get_or_allocate(const IR::Register &reg) {
