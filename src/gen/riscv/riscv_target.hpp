@@ -25,6 +25,8 @@ class RISCVTarget : public ASMGen {
 
     std::map<std::string, std::string> used_registers;
 
+    std::map<std::string, size_t> register_stack_map;
+
 public:
     explicit RISCVTarget(std::ostream &output)
         : ASMGen(output) {
@@ -46,6 +48,11 @@ protected:
     std::string allocate_register(const IR::Register &reg);
     void free_register(const IR::Register &reg);
     [[nodiscard]] std::string find_register(const IR::Register &reg) const;
+
+    // Stack alloc approach
+    void set_reg_on_stack(const std::string &reg, size_t offset);
+    void load_reg_on_stack(const std::string &reg, size_t offset);
+    size_t get_stack_offset(const IR::Register &reg);
 
     // Stack
     void push_reg(const std::string& reg);

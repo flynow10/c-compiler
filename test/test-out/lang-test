@@ -1,30 +1,35 @@
 .text
 main:
-	addi sp, sp, -16
-	sw ra, 12(sp)
+	addi sp, sp, -4
+	sw ra, 0(sp)
 	mv t0, sp
-	sw t0, 8(sp)
+	addi sp, sp, -4
+	sw t0, 0(sp)
 .L_main_0:
-	li t0, 0
-	mv t1, t0
-	li t2, 0
-	mv s0, t2
-.L_main_1:
-	li s1, 10
-	slt s2, s0, s1
-	beqz s2, .L_main_3
-	li s3, 2
-	mul s4, s0, s3
-	add t1, t1, s4
-.L_main_2:
-	mv s5, s0
-	li s6, 1
-	add s0, s0, s6
-	j .L_main_1
-.L_main_3:
-	lw t0, 8(sp)
+	addi sp, sp, -4
+	li t0, 12
+	sw t0, 0(sp)
+	addi sp, sp, -4
+	lw t0, 4(sp)
+	sw t0, 0(sp)
+	addi sp, sp, -4
+	li t0, 10
+	sw t0, 0(sp)
+	addi sp, sp, -4
+	lw t0, 4(sp)
+	sw t0, 0(sp)
+	lw t1, 8(sp)
+	lw t2, 0(sp)
+	add t0, t1, t2
+	addi sp, sp, -4
+	sw t0, 0(sp)
+	addi sp, sp, -4
+	lw t0, 4(sp)
+	sw t0, 0(sp)
+	lw t0, 0(sp)
+	addi sp, sp, 4
 	mv sp, t0
-	lw ra, 12(sp)
-	addi sp, sp, 16
+	lw ra, 0(sp)
+	addi sp, sp, 4
 	ret
 

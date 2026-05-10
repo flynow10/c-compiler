@@ -31,14 +31,17 @@ void RISCVTarget::gen_function(const IR::IRContext &ctx, const IR::Function *fun
 
 void RISCVTarget::gen_instruction(const IR::IRContext &ctx, const IR::Function *function, const IR::Instruction *instruction) {
     if (auto *loadImm = dyn_cast<IR::LoadImmInst>(instruction)) {
-        auto dest= get_or_allocate(loadImm->get_dest());
-        add_instruction("li " + dest + ", " + std::to_string(loadImm->get_value()));
+        auto dest= get_stack_offset(loadImm->get_dest());
+        add_instruction("li t0, " + std::to_string(loadImm->get_value()));
+        set_reg_on_stack("t0", dest);
     } else if (auto *arithInst = dyn_cast<IR::ArithInst>(instruction)) {
         gen_arith_instruction(ctx, arithInst);
     } else if (auto *moveInst = dyn_cast<IR::MoveInst>(instruction)) {
-        auto dest = get_or_allocate(moveInst->get_dest());
-        auto source = find_register(moveInst->get_source());
-        add_instruction("mv " + dest + ", " + source);
+        auto dest = get_stack_offset(moveInst->get_dest());
+        auto source = get_stack_offset(moveInst->get_source());
+        load_reg_on_stack("t0", source);
+        set_reg_on_stack("t0", dest);
+        // add_instruction("mv " + dest + ", " + source);
     } else if (auto *compareInst = dyn_cast<IR::CompareInst>(instruction)) {
         gen_compare_instruction(ctx, compareInst);
     } else if (auto *jumpInst = dyn_cast<IR::JumpInst>(instruction)) {
@@ -46,16 +49,18 @@ void RISCVTarget::gen_instruction(const IR::IRContext &ctx, const IR::Function *
         add_instruction("j " + label);
     } else if (auto *branchInst = dyn_cast<IR::BranchInst>(instruction)) {
         auto label = get_function_label(branchInst->get_label(), function->get_identifier());
-        auto branchReg = find_register(branchInst->get_condition());
-        add_instruction("beqz " + branchReg + ", " + label);
+        auto branchReg = get_stack_offset(branchInst->get_condition());
+        load_reg_on_stack("t0", branchReg);
+        add_instruction("beqz t0, " + label);
     }
 }
 
 void RISCVTarget::gen_arith_instruction(const IR::IRContext &ctx, const IR::ArithInst *arithInst) {
     std::string operation;
-    std::string outputReg = get_or_allocate(arithInst->get_dest());
-    std::string source1Reg = find_register(arithInst->get_source1());
-    std::string source2Reg = find_register(arithInst->get_source2());
+    std::string outputReg = "t0";
+    // std::string outputReg = get_or_allocate(arithInst->get_dest());
+    load_reg_on_stack("t1", get_stack_offset(arithInst->get_source1()));
+    load_reg_on_stack("t2", get_stack_offset(arithInst->get_source2()));
     switch (arithInst->get_operation()) {
         case IR::ArithInst::Operation::ADD:
             operation = "add";
@@ -88,13 +93,20 @@ void RISCVTarget::gen_arith_instruction(const IR::IRContext &ctx, const IR::Arit
             operation = "xor";
             break;
     }
-    add_instruction(operation + " " + outputReg + ", " + source1Reg + ", " + source2Reg);
+    add_instruction(operation + " t0, t1, t2");
+    set_reg_on_stack("t0", get_stack_offset(arithInst->get_dest()));
 }
 
 void RISCVTarget::gen_compare_instruction(const IR::IRContext &ctx, const IR::CompareInst *compareInst) {
-    auto dest = get_or_allocate(compareInst->get_dest());
-    auto source1 = find_register(compareInst->get_source1());
-    auto source2 = find_register(compareInst->get_source2());
+    std::string dest = "t0";
+    std::string source1 = "t1";
+    std::string source2 = "t2";
+    // std::string outputReg = get_or_allocate(arithInst->get_dest());
+    load_reg_on_stack("t1", get_stack_offset(compareInst->get_source1()));
+    load_reg_on_stack("t2", get_stack_offset(compareInst->get_source2()));
+    // auto dest = get_or_allocate(compareInst->get_dest());
+    // auto source1 = find_register(compareInst->get_source1());
+    // auto source2 = find_register(compareInst->get_source2());
     switch (compareInst->get_operation()) {
         case IR::CompareInst::Operation::EQUAL:
             add_instruction("xor " + dest + ", " + source1 + ", " + source2);
@@ -133,6 +145,7 @@ void RISCVTarget::gen_compare_instruction(const IR::IRContext &ctx, const IR::Co
             add_instruction("xori " + dest + ", " + dest + ", 1");
             break;
     }
+    set_reg_on_stack("t0", get_stack_offset(compareInst->get_dest()));
 }
 
 std::string RISCVTarget::get_or_allocate(const IR::Register &reg) {
@@ -171,20 +184,42 @@ std::string RISCVTarget::find_register(const IR::Register &reg) const {
     return used_registers.at(reg.name);
 }
 
-void RISCVTarget::push_reg(const std::string &reg) {
-    stack_pointer += 4;
-    if (stack_pointer % 16 == 0) {
-        add_instruction("addi sp, sp, -16");
+void RISCVTarget::set_reg_on_stack(const std::string &reg, size_t offset) {
+    add_instruction("sw " + reg + ", " + std::to_string(offset - stack_pointer ) + "(sp)");
+}
+
+void RISCVTarget::load_reg_on_stack(const std::string &reg, size_t offset) {
+    add_instruction("lw " + reg + ", " + std::to_string(offset - stack_pointer) + "(sp)");
+}
+
+size_t RISCVTarget::get_stack_offset(const IR::Register &reg) {
+    if (register_stack_map.contains(reg.name)) {
+        return register_stack_map.at(reg.name);
     }
-    add_instruction("sw " + reg + ", " + std::to_string(12 - stack_pointer % 16) + "(sp)");
+
+    add_instruction("addi sp, sp, -4");
+
+    stack_pointer -= 4;
+    register_stack_map[reg.name] = stack_pointer;
+    return stack_pointer;
+}
+
+void RISCVTarget::push_reg(const std::string &reg) {
+    // if (stack_pointer % 16 == 0) {
+    //     add_instruction("addi sp, sp, -16");
+    // }
+    add_instruction("addi sp, sp, -4");
+    stack_pointer -= 4;
+    add_instruction("sw " + reg + ", 0(sp)");
 }
 
 void RISCVTarget::pop_reg(const std::string &reg) {
-    add_instruction("lw " + reg + ", " + std::to_string(12 - stack_pointer % 16) + "(sp)");
-    if (stack_pointer % 16 == 0) {
-        add_instruction("addi sp, sp, 16");
-    }
-    stack_pointer -= 4;
+    add_instruction("lw " + reg + ", 0(sp)");
+    stack_pointer += 4;
+    add_instruction("addi sp, sp, 4");
+    // if (stack_pointer % 16 == 0) {
+    //     add_instruction("addi sp, sp, 16");
+    // }
 }
 
 std::string RISCVTarget::get_function_label(IR::Label label, const std::string &functionName) {
