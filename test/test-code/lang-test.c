@@ -1,6 +1,9 @@
-int main(int argc, char* argv[]) {
-    int a = 12;
-    int b = 10;
-    int c = a + b;
-    return c;
+int test(int, int);
+
+int main() {
+    return test(1, 4);
+}
+
+int test(int a, int b) {
+    return a + b;
 }

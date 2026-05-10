@@ -599,6 +599,8 @@ namespace AST {
             return hasSuffix;
         }
 
+        [[nodiscard]] const std::string &get_identifier() const;
+
         unique_ptr<Node> *begin() override {
             return nodes;
         }
@@ -819,6 +821,9 @@ namespace AST {
         }
 
         [[nodiscard]] ParameterList *get_parameter_list() const {
+            if (!hasParameters) {
+                return nullptr;
+            }
             return cast<ParameterList>(nodes[PARAMETER_LIST].get());
         }
 
@@ -865,6 +870,7 @@ namespace AST {
         }
     };
 
+    class Parameter;
     class ParameterList : public Node {
         unique_ptr<Node> *parameters = nullptr;
         size_t size = 0;
@@ -873,6 +879,10 @@ namespace AST {
         ParameterList() : Node(NK_ParameterList) {}
         ~ParameterList() override {
             delete[] parameters;
+        }
+
+        [[nodiscard]] size_t get_size() const {
+            return size;
         }
 
         unique_ptr<Node> *begin() override {
@@ -889,6 +899,10 @@ namespace AST {
 
         [[nodiscard]] const unique_ptr<Node> *end() const override {
             return parameters + size;
+        }
+
+        Parameter *operator[](const size_t index) const {
+            return cast<Parameter>(parameters[index].get());
         }
 
         static unique_ptr<ParameterList> create(std::vector<unique_ptr<Node>> &parameters) {
@@ -1229,6 +1243,12 @@ namespace AST {
             }
             return functionEntry;
         }
+
+        /// Unsafe before semantic analysis
+        [[nodiscard]] bool _has_parameter_list() const;
+
+        /// Unsafe before semantic analysis
+        [[nodiscard]] ParameterList *_get_parameter_list() const;
 
         unique_ptr<Node> *begin() override {
             return nodes;

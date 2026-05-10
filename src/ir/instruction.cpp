@@ -136,6 +136,29 @@ std::string IR::BranchInst::print() const {
     return ss.str();
 }
 
+std::ostream &printArgList(std::ostream &os, const std::vector<IR::Register> &args) {
+    for (const auto &arg : args) {
+        os << ", " << arg;
+    }
+    return os;
+}
+
+std::string IR::CallInst::print() const {
+    std::stringstream ss;
+    ss << "\t" << dest << " = call %" << identifier;
+    printArgList(ss, args);
+    ss << std::endl;
+    return ss.str();
+}
+
+std::string IR::CallPtrInst::print() const {
+    std::stringstream ss;
+    ss << "\t" << dest << " = call " << func_ptr;
+    printArgList(ss, args);
+    ss << std::endl;
+    return ss.str();
+}
+
 std::string IR::ReturnInst::print() const {
     std::stringstream ss;
     ss << "\tret " << return_value << std::endl;

@@ -22,6 +22,7 @@ namespace IR {
         IT_JUMP,
         IT_BREAK,
         IT_CALL,
+        IT_CALL_PTR,
         IT_RETURN,
     };
 
@@ -230,7 +231,7 @@ namespace IR {
 
     public:
         LoadInst(const Register dest, const Register source, const MemOffset offset = 0) : Instruction(
-                InstructionType::IT_LOAD), dest(dest), source(source), offset(offset) {
+            InstructionType::IT_LOAD), dest(dest), source(source), offset(offset) {
         }
 
         [[nodiscard]] std::string print() const override;
@@ -275,7 +276,7 @@ namespace IR {
 
     public:
         BranchInst(Register condition, const Label label) : Instruction(InstructionType::IT_BREAK),
-                                                           condition(std::move(condition)), label(label) {
+                                                            condition(std::move(condition)), label(label) {
         }
 
         [[nodiscard]] const Register &get_condition() const {
@@ -294,12 +295,64 @@ namespace IR {
     };
 
     class CallInst : public Instruction {
+        const Register dest;
+        const std::string identifier;
+        const std::vector<Register> args;
+
     public:
-        CallInst() : Instruction(InstructionType::IT_CALL) {
+        CallInst(Register dest, std::string identifier, std::vector<Register> args) : Instruction(
+                InstructionType::IT_CALL), dest(std::move(dest)),
+            identifier(std::move(identifier)),
+            args(std::move(args)) {
         }
+
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] const std::string &get_identifier() const {
+            return identifier;
+        }
+
+        [[nodiscard]] const std::vector<Register> &get_args() const {
+            return args;
+        }
+
+        [[nodiscard]] std::string print() const override;
 
         static bool classof(const Instruction *inst) {
             return inst->get_type() == InstructionType::IT_CALL;
+        }
+    };
+
+    class CallPtrInst : public Instruction {
+        const Register dest;
+        const Register func_ptr;
+        const std::vector<Register> args;
+
+    public:
+        CallPtrInst(Register dest, Register funcPtr, std::vector<Register> args) : Instruction(
+                InstructionType::IT_CALL_PTR), dest(std::move(dest)),
+            func_ptr(std::move(funcPtr)),
+            args(std::move(args)) {
+        }
+
+        [[nodiscard]] const Register &get_dest() const {
+            return dest;
+        }
+
+        [[nodiscard]] const Register &get_func_ptr() const {
+            return func_ptr;
+        }
+
+        [[nodiscard]] const std::vector<Register> &get_args() const {
+            return args;
+        }
+
+        [[nodiscard]] std::string print() const override;
+
+        static bool classof(const Instruction *inst) {
+            return inst->get_type() == InstructionType::IT_CALL_PTR;
         }
     };
 
@@ -307,7 +360,8 @@ namespace IR {
         Register return_value;
 
     public:
-        ReturnInst(Register returnValue) : Instruction(InstructionType::IT_RETURN), return_value(returnValue) {
+        ReturnInst(Register returnValue) : Instruction(InstructionType::IT_RETURN),
+                                           return_value(std::move(returnValue)) {
         }
 
         [[nodiscard]] std::string print() const override;

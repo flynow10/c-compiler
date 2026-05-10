@@ -288,9 +288,9 @@ struct std::hash<FunctionArg> {
         size_t result = 0;
         hash_combine(result, functionArg.type);
         // TODO: Identifier should not be considered in hash since it prevents comparison between equivalent function types
-        if (functionArg.is_named) {
-            hash_combine(result, functionArg.identifier);
-        }
+        // if (functionArg.is_named) {
+        //     hash_combine(result, functionArg.identifier);
+        // }
         return result;
     }
 };

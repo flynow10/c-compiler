@@ -236,6 +236,10 @@ Entry *Sema::accept_init_declarator(InitDeclarator *initDeclarator, const QualTy
             auto *initializerList = cast<InitializerList>(initDeclarator->get_initializer());
             accept_initializer_list(initializerList, entry.type.type);
         }
+    } else {
+        if (entry.type.is_function()) {
+            entry.is_complete = false;
+        }
     }
     auto *entryPtr = local_table->addSymbol(entry);
     initDeclarator->set_symbol_entry(entryPtr);
@@ -353,8 +357,22 @@ void Sema::accept_function_decl(FunctionDecl *functionDecl) {
     const auto entryPrototype = accept_decl_specifiers(declSpecs);
     const auto entry = accept_declarator(declarator, entryPrototype, false);
 
-    // TODO: Handle forward declarations
-    function_declaration_ptr = global_table->addSymbol(entry);
+    Entry * functionEntry = global_table->tryFindSymbol(entry.identifier);
+    if (functionEntry != nullptr) {
+        if (functionEntry->is_complete) {
+            throw std::runtime_error("Redefinition of function \"" + functionEntry->identifier + "\"");
+        }
+        // TODO: This still isn't working because named arguments are being included in the function hash
+        // TODO: We can't easily remove then because that breaks the function named argument parsing below
+        if (functionEntry->type != entry.type) {
+            throw std::runtime_error("Function declaration must match forward declaration");
+        }
+        functionEntry->is_complete = true;
+    } else {
+        functionEntry = global_table->addSymbol(entry);
+    }
+
+    function_declaration_ptr = functionEntry;
     functionDecl->set_function_entry(function_declaration_ptr);
 
     // Add intermediate symbol table to contain function arguments
@@ -365,13 +383,22 @@ void Sema::accept_function_decl(FunctionDecl *functionDecl) {
     if (!isa<FunctionType>(entry.type.type)) {
         throw std::runtime_error("Function declaration must declare a function type");
     }
-    auto *functionType = cast<FunctionType>(function_declaration_ptr->type.type);
-    for (const auto & argument : functionType->argument_types) {
-        if (!argument.is_named) {
-            throw std::runtime_error("Function declaration must declare a named argument");
+
+    if (functionDecl->_has_parameter_list()) {
+        const auto *parameters = functionDecl->_get_parameter_list();
+        const auto *functionType = cast<FunctionType>(function_declaration_ptr->type.type);
+
+        for (int i = 0; i < parameters->get_size(); ++i) {
+            const auto &parameterType = functionType->argument_types.at(i);
+            auto parameter = (*parameters)[i];
+
+            if (parameter->get_declarator()->is_abstract()) {
+                throw std::runtime_error("Function declaration must declare a named argument");
+            }
+
+            auto &argumentName =  parameter->get_declarator()->get_identifier();
+            local_table->addSymbol(argumentName, parameterType.type);
         }
-        std::string argumentName = argument.identifier;
-        local_table->addSymbol(argumentName, argument.type);
     }
 
     auto body = functionDecl->get_body();

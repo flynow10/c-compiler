@@ -55,6 +55,7 @@ namespace IR {
         Register lower_post_assignment(const AST::PostAssignment *assignment);
         Register lower_identifier(const AST::Identifier *idNod);
         Register lower_constant(const AST::Constant *constantNode);
+        Register lower_function_call(const AST::FunctionCall *functionCall);
 
         Global *add_global(const std::string& identifier, MemSize size);
         Register load_global_value(const std::string& identifier);

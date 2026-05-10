@@ -79,7 +79,7 @@ int main(const int argc, char *argv[]) {
         outputFile = std::ofstream(options.outFile, std::ofstream::out | std::ofstream::trunc);
         output = &outputFile;
     }
-    // *output << context;
+    *output << context;
 
     RISCVTarget target(*output);
     target.gen(context);

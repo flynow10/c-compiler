@@ -16,8 +16,19 @@ IR::Block * IR::Function::add_block(Label label, Block *after) {
     return blocks.insert(position, std::move(block))->get();
 }
 
+IR::Register *IR::Function::add_argument(const Register &argument) {
+    return &arguments.emplace_back(argument);
+}
+
 std::ostream & IR::operator<<(std::ostream &os, const Function &function) {
-    os << "fn " << function.identifier << "() {" << std::endl;
+    os << "fn %" << function.identifier << "(";
+    for (int i = 0; i < function.arguments.size(); ++i) {
+        os << function.arguments.at(i);
+        if (i != function.arguments.size() - 1) {
+            os << ", ";
+        }
+    }
+    os << ") {" << std::endl;
     for (const auto & block : function.blocks) {
         os << *block ;
     }

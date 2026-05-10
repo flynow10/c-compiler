@@ -39,11 +39,25 @@ void IR::IRContext::lower_globals(const TranslationUnit *ast) {
 }
 
 void IR::IRContext::lower_function(const FunctionDecl *decl) {
+    auto *functionTable = decl->get_symbol_table_raw();
     auto *functionEntry = decl->get_function_entry();
     id_reg_map.clear();
     function_counter = 0;
     current_function = functions.emplace_back(std::make_unique<Function>(functionEntry->identifier)).get();
     current_block = current_function->add_block(function_counter++);
+
+    if (decl->_has_parameter_list()) {
+        auto *parameters = decl->_get_parameter_list();
+
+        for (int i = 0; i < parameters->get_size(); ++i) {
+            auto *parameter = (*parameters)[i];
+            // TODO: Proper register typing and sizing
+            const auto *argReg = current_function->add_argument({parameter->get_declarator()->get_identifier(), Register::Type::Int, 4});
+            const Entry * argEntry = functionTable->findSymbol(argReg->name);
+            id_reg_map[argEntry].push_back(*argReg);
+        }
+    }
+
     auto *body = decl->get_body();
     lower_statement(body);
 }
@@ -273,6 +287,9 @@ IR::Register IR::IRContext::lower_expression(const Expression *expr) {
     if (auto *idNode = dyn_cast<Identifier>(expr)) {
         return lower_identifier(idNode);
     }
+    if (auto *functionCall = dyn_cast<FunctionCall>(expr)) {
+        return lower_function_call(functionCall);
+    }
     if (auto *constantNode = dyn_cast<Constant>(expr)) {
         return lower_constant(constantNode);
     }
@@ -472,6 +489,7 @@ IR::Register IR::IRContext::lower_identifier(const Identifier *idNode) {
             return load_global_value(id);
         }
     }
+
     throw std::runtime_error("Not implemented");
 }
 
@@ -496,6 +514,29 @@ IR::Register IR::IRContext::lower_constant(const Constant *constantNode) {
     parse_int(valueStr,value);
     Register destReg = get_next_temp_reg();
     current_block->add_instruction(LoadImmInst(destReg, value));
+    return destReg;
+}
+
+IR::Register IR::IRContext::lower_function_call(const FunctionCall *functionCall) {
+    auto functionExpr = functionCall->get_lhs();
+    Register destReg = get_next_temp_reg();
+    std::vector<Register> args;
+    if (functionCall->has_argument_list()) {
+        auto *argumentList = functionCall->get_argument_list();
+        for (int i = 0; i < argumentList->get_size(); ++i) {
+            auto *expr = (*argumentList)[i];
+            args.push_back(lower_expression(expr));
+        }
+    }
+
+    if (functionExpr->get_type_info().is_function()) {
+        auto *functionId = cast<Identifier>(functionExpr);
+        current_block->add_instruction(CallInst(destReg, functionId->get_value(), args));
+    } else {
+        Register functionPointer = lower_expression(functionExpr);
+        current_block->add_instruction(CallPtrInst(destReg, functionPointer, args));
+    }
+
     return destReg;
 }
 
