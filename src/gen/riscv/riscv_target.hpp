@@ -44,6 +44,7 @@ protected:
     void gen_arith_instruction(const IR::IRContext &ctx, const IR::ArithInst *arithInst);
     void gen_compare_instruction(const IR::IRContext &ctx, const IR::CompareInst *compareInst);
     void gen_return_instruction(const IR::IRContext &ctx, const IR::ReturnInst *returnInst);
+    void gen_call_instruction(const IR::IRContext &ctx, const IR::CallInst *callInst);
 
     // Register allocation
     size_t compute_stack_allocations(const IR::IRContext &ctx, const IR::Function *function);

@@ -55,7 +55,11 @@ void IR::IRContext::lower_function(const FunctionDecl *decl) {
             // TODO: Proper register typing and sizing
             const auto *argReg = current_function->add_argument({parameter->get_declarator()->get_identifier(), Register::Type::Int, 4});
             const Entry * argEntry = functionTable->findSymbol(argReg->name);
-            id_reg_map[argEntry].push_back(*argReg);
+            auto argPtr = get_next_temp_reg();
+            // Move parameter to stack allocation
+            current_block->add_instruction(AllocateInst::create(argPtr, argEntry->type.get_size()));
+            current_block->add_instruction(StoreInst::create(argPtr, RegisterArgument::create(*argReg)));
+            id_reg_map[argEntry].push_back(argPtr);
         }
     }
 

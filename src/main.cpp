@@ -12,8 +12,15 @@
 #include "sema/sema.hpp"
 
 struct CompilerOptions {
+    enum class OutputType {
+        ASM,
+        IR,
+        AST,
+        TOKENS,
+    };
     std::string inFile;
     std::string outFile;
+    OutputType outputType = OutputType::ASM;
 };
 
 int parse_argument(const std::string &argument, const int argIndex, const int argc,
@@ -24,6 +31,20 @@ int parse_argument(const std::string &argument, const int argIndex, const int ar
         }
         options.outFile = argv[argIndex + 1];
         return 2;
+    }
+
+    if (argument == "-emit-ir") {
+        options.outputType = CompilerOptions::OutputType::IR;
+        return 1;
+    }
+
+    if (argument == "-emit-ast") {
+        options.outputType = CompilerOptions::OutputType::AST;
+        return 1;
+    }
+
+    if (argument == "-emit-tokens") {
+        options.outputType = CompilerOptions::OutputType::TOKENS;
     }
 
     options.inFile = argument;
@@ -50,26 +71,6 @@ int main(const int argc, char *argv[]) {
 
     std::ifstream inputFile(options.inFile);
 
-    // Lexer lexer;
-    // lexer.tokenize(inputFile);
-    //
-    // while (lexer.has_token()) {
-    //   Token token = lexer.pop();
-    //   std::cout << token.type() << " - \"" << token.value() << "\"" << std::endl;
-    // }
-    //
-    // inputFile.seekg(0, std::ios::beg);
-
-    Parser parser;
-
-    const auto ast = parser.parse(inputFile);
-
-    Sema sema;
-    sema.accept_ast(ast.get());
-
-    IR::IRContext context;
-    context.lower_AST(cast<TranslationUnit>(ast.get()));
-
     std::ostream *output;
     std::ofstream outputFile;
 
@@ -79,10 +80,56 @@ int main(const int argc, char *argv[]) {
         outputFile = std::ofstream(options.outFile, std::ofstream::out | std::ofstream::trunc);
         output = &outputFile;
     }
-    *output << context;
+    if (options.outputType == CompilerOptions::OutputType::TOKENS) {
+        Lexer lexer;
+        lexer.tokenize(inputFile);
 
-    // RISCVTarget target(*output);
-    // target.gen(context);
+        while (lexer.has_token()) {
+            Token token = lexer.pop();
+            *output << token.type() << " - \"" << token.value() << "\"" << std::endl;
+        }
+
+        if (outputFile.is_open()) {
+            outputFile.close();
+        }
+        inputFile.close();
+
+        return 0;
+    }
+
+    Parser parser;
+
+    const auto ast = parser.parse(inputFile);
+
+    Sema sema;
+    sema.accept_ast(ast.get());
+
+    if (options.outputType == CompilerOptions::OutputType::AST) {
+        *output << ast;
+
+        if (outputFile.is_open()) {
+            outputFile.close();
+        }
+        inputFile.close();
+        return 0;
+    }
+
+    IR::IRContext context;
+    context.lower_AST(cast<TranslationUnit>(ast.get()));
+
+    if (options.outputType == CompilerOptions::OutputType::IR) {
+        *output << context;
+
+        if (outputFile.is_open()) {
+            outputFile.close();
+        }
+        inputFile.close();
+        return 0;
+    }
+
+
+    RISCVTarget target(*output);
+    target.gen(context);
 
     if (outputFile.is_open()) {
         outputFile.close();

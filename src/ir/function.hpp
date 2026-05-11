@@ -18,12 +18,17 @@ namespace IR {
     public:
         explicit Function(std::string identifier) : identifier(std::move(identifier)) {}
 
-        [[nodiscard]] const std::string &get_identifier() const { return identifier; }
+        [[nodiscard]] const std::string &get_identifier() const {
+            return identifier;
+        }
 
         [[nodiscard]] const std::vector<std::unique_ptr<Block>> &get_blocks() const {
             return blocks;
         }
 
+        [[nodiscard]] const std::vector<Register> &get_arguments() const {
+            return arguments;
+        }
 
         Block *add_block(Label label);
         Block *add_block(Label label, Block *after);

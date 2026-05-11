@@ -7,6 +7,7 @@
 #include <ranges>
 
 #include "../../ir/instruction.hpp"
+#include "../../ir/instruction.hpp"
 
 void RISCVTarget::gen_preamble() {
     output << ".text" << "\n";
@@ -24,8 +25,17 @@ void RISCVTarget::gen_function(const IR::IRContext &ctx, const IR::Function *fun
     max_stack_alloc = compute_stack_allocations(ctx, function) + 4;
     const size_t alignedStackAlloc = get_aligned_stack_size(max_stack_alloc);
     add_instruction("addi sp, sp, -" + std::to_string(alignedStackAlloc));
-    return_address_location= reserve_next_alloca(4);
+    return_address_location = reserve_next_alloca(4);
     set_reg_on_stack("ra", return_address_location);
+
+    const auto &arguments = function->get_arguments();
+    for (int i = 0; i < arguments.size(); ++i) {
+        if (i > 7) {
+            throw std::runtime_error("Too many arguments to function");
+        }
+        const auto &argument = arguments[i];
+        ir_to_machine_reg[argument.name] = "a" + std::to_string(i);
+    }
 
     for (const auto & block : function->get_blocks()) {
         add_label(get_function_label(block->get_label(), functionName));
@@ -85,15 +95,24 @@ void RISCVTarget::gen_instruction(const IR::IRContext &ctx, const IR::Function *
         }
     } else if (auto *returnInst = dyn_cast<IR::ReturnInst>(instruction)) {
         gen_return_instruction(ctx, returnInst);
+    } else if (auto *callInst = dyn_cast<IR::CallInst>(instruction)) {
+        gen_call_instruction(ctx, callInst);
     }
 }
 
-const std::vector<IR::ArithInst::Operation> CommutativeOperations = {
+const std::vector CommutativeOperations = {
     IR::ArithInst::Operation::ADD,
     IR::ArithInst::Operation::MULTIPLY,
     IR::ArithInst::Operation::AND,
     IR::ArithInst::Operation::OR,
     IR::ArithInst::Operation::XOR,
+};
+
+const std::vector DisallowImmediates= {
+    IR::ArithInst::Operation::SUBTRACT,
+    IR::ArithInst::Operation::MULTIPLY,
+    IR::ArithInst::Operation::DIVIDE,
+    IR::ArithInst::Operation::MODULO,
 };
 
 void RISCVTarget::gen_arith_instruction(const IR::IRContext &ctx, const IR::ArithInst *arithInst) {
@@ -139,13 +158,13 @@ void RISCVTarget::gen_arith_instruction(const IR::IRContext &ctx, const IR::Arit
         source1 = source2;
         source2 = temp;
     }
-    std::string tempImmediateReg;
+    std::string tempImmediateReg1, tempImmediateReg2;
     std::string argument1;
     std::string argument2;
     if (auto *immArg = dyn_cast<IR::ImmediateArgument>(source1)) {
-        tempImmediateReg = allocate_machine_reg();
-        add_instruction("li " + tempImmediateReg + ", " + std::to_string(immArg->imm.value));
-        argument1 = tempImmediateReg;
+        tempImmediateReg1 = allocate_machine_reg();
+        add_instruction("li " + tempImmediateReg1 + ", " + std::to_string(immArg->imm.value));
+        argument1 = tempImmediateReg1;
     } else {
         auto *regArg = cast<IR::RegisterArgument>(source1);
         argument1 = get_or_allocate_machine_reg(regArg->reg);
@@ -160,9 +179,21 @@ void RISCVTarget::gen_arith_instruction(const IR::IRContext &ctx, const IR::Arit
         argument2 = get_or_allocate_machine_reg(regArg->reg);
     }
 
+    // Handle instruction types which don't offer an immediate variant
+    if (!immediateModifier.empty() && std::ranges::find(DisallowImmediates, arithInst->get_operation()) != DisallowImmediates.end()) {
+        tempImmediateReg2 = allocate_machine_reg();
+        add_instruction("li " + tempImmediateReg2 + ", " + argument2);
+        argument2 = tempImmediateReg2;
+        immediateModifier = "";
+    }
+
     add_instruction(operation + immediateModifier + " " + outputReg + ", " + argument1 + ", " + argument2);
-    if (!tempImmediateReg.empty()) {
-        free_machine_reg(tempImmediateReg);
+
+    if (!tempImmediateReg1.empty()) {
+        free_machine_reg(tempImmediateReg1);
+    }
+    if (!tempImmediateReg2.empty()) {
+        free_machine_reg(tempImmediateReg2);
     }
 }
 
@@ -263,6 +294,51 @@ void RISCVTarget::gen_return_instruction(const IR::IRContext &ctx, const IR::Ret
     load_reg_on_stack("ra", return_address_location);
     add_instruction("addi sp, sp, " + std::to_string(stackSize));
     add_instruction("ret");
+}
+
+void RISCVTarget::gen_call_instruction(const IR::IRContext &ctx, const IR::CallInst *callInst) {
+
+    // Save any used registers
+    size_t numSaved = used_registers.size();
+    if (numSaved > 0) {
+        add_instruction("addi sp, sp, -" + std::to_string(numSaved * 4));
+        for (int i = 0; i < numSaved; ++i) {
+            std::string reg = used_registers[i];
+            add_instruction("sw " + reg + ", " + std::to_string(i * 4) + "(sp)");
+        }
+    }
+
+    // Setup argument registers
+    auto &arguments = callInst->get_args();
+    for (int i = 0; i < arguments.size(); ++i) {
+        auto *argument = arguments[i].get();
+        auto argReg = "a" + std::to_string(i);
+        if (auto *immediateArg = dyn_cast<IR::ImmediateArgument>(argument)) {
+            add_instruction("li " + argReg + ", " + std::to_string(immediateArg->imm.value));
+        } else if (auto *regArg = dyn_cast<IR::RegisterArgument>(argument)) {
+            auto machineReg = get_or_allocate_machine_reg(regArg->reg);
+            add_instruction("mv " + argReg + ", " + machineReg);
+        }
+    }
+
+    auto *funcPtr = callInst->get_func_ptr();
+    if (auto *functionRefArg = dyn_cast<IR::FunctionPtrArgument>(funcPtr)) {
+        add_instruction("jal " + functionRefArg->func_name);
+    } else {
+        auto *registerArg = dyn_cast<IR::RegisterArgument>(funcPtr);
+        auto machineReg = get_or_allocate_machine_reg(registerArg->reg);
+        add_instruction("jalr " + machineReg);
+    }
+
+    if (numSaved > 0) {
+        for (int i = 0; i < numSaved; ++i) {
+            std::string reg = used_registers[i];
+            add_instruction("lw " + reg + ", " + std::to_string(i * 4) + "(sp)");
+        }
+        add_instruction("addi sp, sp, " + std::to_string(numSaved * 4));
+    }
+    std::string outputReg = get_or_allocate_machine_reg(callInst->get_dest());
+    add_instruction("mv " + outputReg + ", a0");
 }
 
 size_t RISCVTarget::compute_stack_allocations(const IR::IRContext &ctx, const IR::Function *function) {
