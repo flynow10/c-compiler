@@ -224,7 +224,7 @@ namespace IR {
 
     /**
      * Loads from memory the value stored in the source ptr.
-     * @param source must be of type ptr
+     * @param source must be a register of type ptr or a global
      */
     class LoadInst : public Instruction {
         const Register dest;
@@ -257,6 +257,7 @@ namespace IR {
     /**
      * Stores in memory the value specified by source
      * @param dest must be of type ptr
+     * @param source is either a register or an immediate
      */
     class StoreInst : public Instruction {
         const Register dest;
@@ -312,21 +313,23 @@ namespace IR {
 
     /**
      * Conditionally branches to the jump point the condition register has a value of zero
+     * @param condition must be a register or an immediate
      * @param branch_point must be a label or a register of type ptr
      */
     class BranchInst : public Instruction {
-        const std::unique_ptr<InstArgument> condition, branch_point;
+        const Register condition;
+        std::unique_ptr<InstArgument> branch_point;
 
     public:
-        BranchInst(std::unique_ptr<InstArgument> condition, std::unique_ptr<InstArgument> branchPoint) : Instruction(InstructionType::IT_BREAK),
+        BranchInst(Register condition, std::unique_ptr<InstArgument> branchPoint) : Instruction(InstructionType::IT_BREAK),
                                                             condition(std::move(condition)), branch_point(std::move(branchPoint)) {
         }
 
-        [[nodiscard]] InstArgument *get_condition() const {
-            return condition.get();
+        [[nodiscard]] const Register &get_condition() const {
+            return condition;
         }
 
-        [[nodiscard]] InstArgument *get_label() const {
+        [[nodiscard]] InstArgument *get_branch_point() const {
             return branch_point.get();
         }
 
@@ -336,7 +339,7 @@ namespace IR {
             return inst->get_type() == InstructionType::IT_BREAK;
         }
 
-        static std::unique_ptr<BranchInst> create(std::unique_ptr<InstArgument> condition, std::unique_ptr<InstArgument> branchPoint) {
+        static std::unique_ptr<BranchInst> create(Register condition, std::unique_ptr<InstArgument> branchPoint) {
             return std::make_unique<BranchInst>(std::move(condition), std::move(branchPoint));
         }
     };

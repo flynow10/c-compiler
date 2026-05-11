@@ -61,6 +61,10 @@ void IR::IRContext::lower_function(const FunctionDecl *decl) {
 
     auto *body = decl->get_body();
     lower_statement(body);
+
+    if (!isa<ReturnInst>(current_block->get_instructions().back().get())) {
+        current_block->add_instruction(ReturnInst::create(ImmediateArgument::create(0, 0)));
+    }
 }
 
 void IR::IRContext::lower_statement(const Statement *stmt) {
@@ -156,10 +160,10 @@ void IR::IRContext::lower_selection(const SelectionStatement *stmt) {
     thenBlock->is_preceded_by(current_block);
     // TODO: Handle conditional blocks correctly
     if (stmt->has_else()) {
-        current_block->add_instruction(BranchInst::create(conditionReg.to_argument(), LabelArgument::create(elseBlock->get_label())));
+        current_block->add_instruction(BranchInst::create(conditionReg.get_as_register(), LabelArgument::create(elseBlock->get_label())));
         elseBlock->is_preceded_by(current_block);
     } else {
-        current_block->add_instruction(BranchInst::create(conditionReg.to_argument(), LabelArgument::create(afterCondition->get_label())));
+        current_block->add_instruction(BranchInst::create(conditionReg.get_as_register(), LabelArgument::create(afterCondition->get_label())));
         afterCondition->is_preceded_by(current_block);
     }
 
@@ -185,7 +189,7 @@ void IR::IRContext::lower_while(const WhileStatement *stmt) {
 
     current_block = body;
     const auto conditionReg = lower_condition(stmt->get_condition());
-    current_block->add_instruction(BranchInst::create(conditionReg.to_argument(), LabelArgument::create(afterLoop->get_label())));
+    current_block->add_instruction(BranchInst::create(conditionReg.get_as_register(), LabelArgument::create(afterLoop->get_label())));
     afterLoop->is_preceded_by(current_block);
 
     lower_statement(stmt->get_body());
@@ -215,7 +219,7 @@ void IR::IRContext::lower_do(const DoStatement *stmt) {
     const auto conditionReg = lower_condition(stmt->get_condition());
     const Register invertedCondition = get_next_temp_reg();
     current_block->add_instruction(UnaryInst::create(invertedCondition, conditionReg.to_argument(), UnaryInst::Operation::NEGATE));
-    current_block->add_instruction(BranchInst::create(RegisterArgument::create(invertedCondition), LabelArgument::create(body->get_label())));
+    current_block->add_instruction(BranchInst::create(invertedCondition, LabelArgument::create(body->get_label())));
     body->is_preceded_by(current_block);
 
     afterLoop->is_preceded_by(current_block);
@@ -246,7 +250,7 @@ void IR::IRContext::lower_for(const ForStatement *stmt) {
     current_block = body;
     if (stmt->has_condition()) {
         const auto conditionReg = lower_condition(stmt->get_condition());
-        current_block->add_instruction(BranchInst::create(conditionReg.to_argument(), LabelArgument::create(afterLoop->get_label())));
+        current_block->add_instruction(BranchInst::create(conditionReg.get_as_register(), LabelArgument::create(afterLoop->get_label())));
         afterLoop->is_preceded_by(body);
     }
     lower_statement(stmt->get_body());
@@ -296,8 +300,12 @@ IR::RegOrImmediate IR::IRContext::lower_expression(const Expression *expr) {
 }
 
 IR::RegOrImmediate IR::IRContext::lower_assignment(const Assignment *assignment) {
-    auto assignTo = lower_expression(assignment->get_lhs());
-    auto assignToPtr = assignTo.get_as_register();
+    auto assignTo = assignment->get_lhs();
+    auto type = assignTo->get_type_info();
+    if (!type.is_integer()) {
+        throw std::runtime_error("Not implemented");
+    }
+    auto assignToPtr = Register(cast<Identifier>(assignTo)->get_value(), Register::Type::Ptr, 4);
     auto expr = lower_expression(assignment->get_rhs());
     if (assignment->get_operation() != Assignment::EQUAL) {
         auto tempReg = get_next_temp_reg();
@@ -342,7 +350,7 @@ IR::RegOrImmediate IR::IRContext::lower_assignment(const Assignment *assignment)
         expr = RegOrImmediate(tempReg);
     }
     current_block->add_instruction(StoreInst::create(assignToPtr, expr.to_argument()));
-    return assignTo;
+    return expr;
 }
 
 const std::vector CompareOps = {
@@ -436,7 +444,10 @@ IR::RegOrImmediate IR::IRContext::lower_unary_op(const UnaryOp *unary_op) {
         case UnaryOp::Op::INCREMENT:
         case UnaryOp::DECREMENT: {
             auto exprReg = expr.get_as_register();
-            current_block->add_instruction(ArithInst::create(exprReg, expr.to_argument(), ImmediateArgument::create(4, exprReg.size), operation == UnaryOp::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT));
+            auto *rhsId = cast<Identifier>(unary_op->get_rhs());
+            auto assignToPtr = Register(rhsId->get_value(), Register::Type::Ptr, 4);
+            current_block->add_instruction(ArithInst::create(exprReg, expr.to_argument(), ImmediateArgument::create(1, exprReg.size), operation == UnaryOp::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT));
+            current_block->add_instruction(StoreInst::create(assignToPtr, expr.to_argument()));
             return expr;
         }
         case UnaryOp::NEGATE: {
@@ -474,16 +485,14 @@ IR::RegOrImmediate IR::IRContext::lower_unary_op(const UnaryOp *unary_op) {
 IR::RegOrImmediate IR::IRContext::lower_post_assignment(const PostAssignment *assignment) {
     RegOrImmediate expr = lower_expression(assignment->get_lhs());
     Register temp = get_next_temp_reg();
-    Register returnValue = get_next_temp_reg();
-    const Register& destReg = expr.get_as_register();
-    current_block->add_instruction(LoadInst::create(temp, RegisterArgument::create(destReg)));
-    current_block->add_instruction(LoadInst::create(returnValue, RegisterArgument::create(destReg)));
+    auto *idNode = cast<Identifier>(assignment->get_lhs());
+    auto destReg = Register(idNode->get_value(), Register::Type::Ptr, 4);
 
     auto operation = assignment->get_operation() == PostAssignment::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT;
-    current_block->add_instruction(ArithInst::create(temp, RegisterArgument::create(temp), ImmediateArgument::create(1, temp.size), operation));
+    current_block->add_instruction(ArithInst::create(temp, expr.to_argument(), ImmediateArgument::create(1, temp.size), operation));
     current_block->add_instruction(StoreInst::create(destReg, RegisterArgument::create(temp)));
 
-    return RegOrImmediate(returnValue);
+    return expr;
 }
 
 IR::RegOrImmediate IR::IRContext::lower_identifier(const Identifier *idNode) {

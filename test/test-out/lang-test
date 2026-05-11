@@ -1,11 +1,35 @@
-fn %main() {
-@0:
-    ptr $a = allocate 4
-    store i32 4 at ptr $a
-    ptr $b = allocate 4
-    store i32 4 at ptr $b
-    i32 $0 = load ptr $a
-    i32 $1 = load ptr $b
-    i32 $2 = add i32 $0, i32 $1
-    ret i32 $2
-}
+.text
+main:
+	addi sp, sp, -32
+	sw ra, 28(sp)
+.L_main_0:
+	li t0, 0
+	sw t0, 24(sp)
+	li t0, 1
+	sw t0, 20(sp)
+	li t0, 0
+	sw t0, 16(sp)
+.L_main_1:
+	lw t0, 16(sp)
+	slti t1, t0, 10
+	beqz t1, .L_main_3
+	lw t2, 24(sp)
+	lw s0, 20(sp)
+	add s1, t2, s0
+	sw s1, 12(sp)
+	lw s2, 20(sp)
+	sw s2, 24(sp)
+	lw s3, 12(sp)
+	sw s3, 20(sp)
+.L_main_2:
+	lw s4, 16(sp)
+	addi s4, s4, 1
+	sw s4, 16(sp)
+	j .L_main_1
+.L_main_3:
+	lw s5, 24(sp)
+	mv a0, s5
+	lw ra, 28(sp)
+	addi sp, sp, 32
+	ret
+
