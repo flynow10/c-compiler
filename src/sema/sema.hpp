@@ -90,6 +90,7 @@ public:
     // ---------
     void accept_ast(Node *ast);
 private:
+    void initialize_builtin_functions();
     void accept_decl(Decl *decl);
 
     /// NOTE: If couldBeForwardDecl is true, this function still checks semantics, but returns

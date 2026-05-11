@@ -11,6 +11,12 @@
 
 void RISCVTarget::gen_preamble() {
     output << ".text" << "\n";
+    add_label("_start");
+    add_instruction("j main");
+    add_label("puts");
+    add_instruction("li a7, 11");
+    add_instruction("ecall");
+    add_instruction("ret");
 }
 
 void RISCVTarget::gen_function(const IR::IRContext &ctx, const IR::Function *function) {
@@ -23,7 +29,7 @@ void RISCVTarget::gen_function(const IR::IRContext &ctx, const IR::Function *fun
     register_stack_map.clear();
 
     max_stack_alloc = compute_stack_allocations(ctx, function) + 4;
-    const size_t alignedStackAlloc = get_aligned_stack_size(max_stack_alloc);
+    const size_t alignedStackAlloc = get_aligned_size(max_stack_alloc);
     add_instruction("addi sp, sp, -" + std::to_string(alignedStackAlloc));
     return_address_location = reserve_next_alloca(4);
     set_reg_on_stack("ra", return_address_location);
@@ -272,7 +278,7 @@ void RISCVTarget::gen_return_instruction(const IR::IRContext &ctx, const IR::Ret
         auto machineReg = get_possibly_ptr_machine_reg(regArg->reg);
         add_instruction("mv a0, " + machineReg);
     }
-    const size_t stackSize = get_aligned_stack_size(max_stack_alloc);
+    const size_t stackSize = get_aligned_size(max_stack_alloc);
     load_reg_on_stack("ra", return_address_location);
     add_instruction("addi sp, sp, " + std::to_string(stackSize));
     add_instruction("ret");
@@ -378,7 +384,7 @@ size_t RISCVTarget::compute_stack_allocations(const IR::IRContext &ctx, const IR
     for (const auto & block : function->get_blocks()) {
         for (const auto & instruction : block->get_instructions()) {
             if (auto *alloca = dyn_cast<IR::AllocateInst>(instruction.get())) {
-                allocated += alloca->get_size();
+                allocated += get_aligned_size(alloca->get_size(), 4);
             }
         }
     }
@@ -386,23 +392,23 @@ size_t RISCVTarget::compute_stack_allocations(const IR::IRContext &ctx, const IR
 }
 
 size_t RISCVTarget::reserve_next_alloca(size_t allocaSize) {
-    next_alloca_pointer += allocaSize;
+    next_alloca_pointer += get_aligned_size(allocaSize, 4);
     if (next_alloca_pointer > max_stack_alloc) {
         throw std::runtime_error("Stack allocation outside of precomputed range");
     }
     return next_alloca_pointer;
 }
 
-size_t RISCVTarget::get_aligned_stack_size(const size_t size) {
-    return size + (16 - size % 16) % 16;
+size_t RISCVTarget::get_aligned_size(const size_t size, const size_t alignment) {
+    return size + (alignment - size % alignment) % alignment;
 }
 
 void RISCVTarget::set_reg_on_stack(const std::string &reg, const size_t offset) {
-    add_instruction("sw " + reg + ", " + std::to_string(get_aligned_stack_size(max_stack_alloc) - offset) + "(sp)");
+    add_instruction("sw " + reg + ", " + std::to_string(get_aligned_size(max_stack_alloc) - offset) + "(sp)");
 }
 
 void RISCVTarget::load_reg_on_stack(const std::string &reg, const size_t offset) {
-    add_instruction("lw " + reg + ", " + std::to_string(get_aligned_stack_size(max_stack_alloc) - offset) + "(sp)");
+    add_instruction("lw " + reg + ", " + std::to_string(get_aligned_size(max_stack_alloc) - offset) + "(sp)");
 }
 
 std::string RISCVTarget::get_or_allocate_machine_reg(const IR::Register &reg) {

@@ -52,7 +52,7 @@ protected:
     // Register allocation
     size_t compute_stack_allocations(const IR::IRContext &ctx, const IR::Function *function);
     size_t reserve_next_alloca(size_t allocaSize);
-    size_t get_aligned_stack_size(size_t size);
+    size_t get_aligned_size(size_t size, size_t alignment = 16);
     void set_reg_on_stack(const std::string &reg, size_t offset);
     void load_reg_on_stack(const std::string &reg, size_t offset);
     std::string get_or_allocate_machine_reg(const IR::Register &reg);

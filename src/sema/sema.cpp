@@ -18,6 +18,7 @@ void Sema::accept_ast(Node *ast) {
             tu->set_symbol_table(std::make_shared<SymbolTable>(nullptr, SymbolTable::File));
             global_table = tu->get_symbol_table_raw();
             local_table = global_table;
+            initialize_builtin_functions();
             int i = 0;
             for (const auto &node: *tu) {
                 try {
@@ -43,6 +44,14 @@ void Sema::accept_ast(Node *ast) {
         SemaAnalysis::print_exception(e);
         throw std::runtime_error("exception occurred in semantic analysis");
     }
+}
+
+void Sema::initialize_builtin_functions() {
+    FunctionType::ArgList argList;
+    argList.emplace_back(FunctionArg({IntegerType::get(*this, PrimitiveType::Char)}));
+    auto putsFunction = FunctionType::get(*this, {&void_type, true}, argList);
+    QualType putsType = {putsFunction, true};
+    global_table->addSymbol("puts", putsType);
 }
 
 const std::unordered_map<TypeSpecifier::TypeSpecifierType, PrimitiveType> TypeSpecMap = {

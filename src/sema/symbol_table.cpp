@@ -24,7 +24,7 @@ Entry * SymbolTable::addSymbol(const Entry &entry) {
     return &symbols[entry.identifier];
 }
 
-Entry * SymbolTable::addSymbol(const std::string &identifier, QualType type) {
+Entry * SymbolTable::addSymbol(const std::string& identifier, QualType type) {
     return addSymbol(Entry::create(identifier, type));
 }
 

@@ -154,6 +154,7 @@ std::string parseEscapedString(std::istream &ss, const char endChar) {
     char currentChar;
     while ((currentChar = ss.get()) != endChar && currentChar != '\n') {
         if (currentChar == '\\') {
+            str += currentChar;
             str += ss.get();
         } else {
             str += currentChar;
