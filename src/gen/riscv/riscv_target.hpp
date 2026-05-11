@@ -45,6 +45,9 @@ protected:
     void gen_compare_instruction(const IR::IRContext &ctx, const IR::CompareInst *compareInst);
     void gen_return_instruction(const IR::IRContext &ctx, const IR::ReturnInst *returnInst);
     void gen_call_instruction(const IR::IRContext &ctx, const IR::CallInst *callInst);
+    void gen_load_instruction(const IR::IRContext &ctx, const IR::LoadInst *loadInst);
+    void gen_store_instruction(const IR::IRContext &ctx, const IR::StoreInst *storeInst);
+    std::string get_possibly_ptr_machine_reg(const IR::Register &reg);
 
     // Register allocation
     size_t compute_stack_allocations(const IR::IRContext &ctx, const IR::Function *function);
@@ -53,6 +56,7 @@ protected:
     void set_reg_on_stack(const std::string &reg, size_t offset);
     void load_reg_on_stack(const std::string &reg, size_t offset);
     std::string get_or_allocate_machine_reg(const IR::Register &reg);
+    std::string get_machine_reg(const IR::Register &reg);
 
     void free_machine_reg(const std::string &reg);
     std::string allocate_machine_reg();

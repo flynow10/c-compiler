@@ -60,6 +60,8 @@ namespace IR {
         RegOrImmediate lower_constant(const AST::Constant *constantNode);
         RegOrImmediate lower_function_call(const AST::FunctionCall *functionCall);
 
+        Register lower_lvalue_ptr(const AST::Expression *expr);
+
         Global *add_global(const std::string& identifier, MemSize size);
         Register load_global_value(const std::string& identifier);
 

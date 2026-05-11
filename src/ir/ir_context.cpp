@@ -53,9 +53,16 @@ void IR::IRContext::lower_function(const FunctionDecl *decl) {
         for (int i = 0; i < parameters->get_size(); ++i) {
             auto *parameter = (*parameters)[i];
             // TODO: Proper register typing and sizing
-            const auto *argReg = current_function->add_argument({parameter->get_declarator()->get_identifier(), Register::Type::Int, 4});
-            const Entry * argEntry = functionTable->findSymbol(argReg->name);
-            auto argPtr = get_next_temp_reg();
+            Register::Type type;
+            auto parameterName = parameter->get_declarator()->get_identifier();
+            const Entry * argEntry = functionTable->findSymbol(parameterName);
+            if (argEntry->type.is_integer()) {
+                type = Register::Type::Int;
+            } else {
+                type = Register::Type::Ptr;
+            }
+            const auto *argReg = current_function->add_argument({parameterName, type, 4});
+            auto argPtr = get_next_temp_reg(Register::Type::Ptr);
             // Move parameter to stack allocation
             current_block->add_instruction(AllocateInst::create(argPtr, argEntry->type.get_size()));
             current_block->add_instruction(StoreInst::create(argPtr, RegisterArgument::create(*argReg)));
@@ -123,7 +130,7 @@ void IR::IRContext::lower_init_decl(const InitDeclarator *initDecl) {
     }
 
     auto identifier = get_next_available_reg_name(entry->identifier);
-    const auto destReg = Register(identifier, Register::Type::Ptr, entry->type.get_size());
+    const auto destReg = Register(identifier, Register::Type::Ptr, 4);
     current_block->add_instruction(AllocateInst::create(destReg, entry->type.get_size()));
 
     if (initDecl->has_initializer()) {
@@ -305,11 +312,7 @@ IR::RegOrImmediate IR::IRContext::lower_expression(const Expression *expr) {
 
 IR::RegOrImmediate IR::IRContext::lower_assignment(const Assignment *assignment) {
     auto assignTo = assignment->get_lhs();
-    auto type = assignTo->get_type_info();
-    if (!type.is_integer()) {
-        throw std::runtime_error("Not implemented");
-    }
-    auto assignToPtr = Register(cast<Identifier>(assignTo)->get_value(), Register::Type::Ptr, 4);
+    auto assignToPtr = lower_lvalue_ptr(assignTo);
     auto expr = lower_expression(assignment->get_rhs());
     if (assignment->get_operation() != Assignment::EQUAL) {
         auto tempReg = get_next_temp_reg();
@@ -443,13 +446,15 @@ IR::RegOrImmediate IR::IRContext::lower_binary_op(const BinOp *binOp) {
 }
 
 IR::RegOrImmediate IR::IRContext::lower_unary_op(const UnaryOp *unary_op) {
+    if (unary_op->get_operation() == UnaryOp::ADDRESS_OF) {
+        return RegOrImmediate(lower_lvalue_ptr(unary_op->get_rhs()));
+    }
     RegOrImmediate expr = lower_expression(unary_op->get_rhs());
     switch (auto operation = unary_op->get_operation()) {
         case UnaryOp::Op::INCREMENT:
         case UnaryOp::DECREMENT: {
             auto exprReg = expr.get_as_register();
-            auto *rhsId = cast<Identifier>(unary_op->get_rhs());
-            auto assignToPtr = Register(rhsId->get_value(), Register::Type::Ptr, 4);
+            auto assignToPtr = lower_lvalue_ptr(unary_op->get_rhs());
             current_block->add_instruction(ArithInst::create(exprReg, expr.to_argument(), ImmediateArgument::create(1, exprReg.size), operation == UnaryOp::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT));
             current_block->add_instruction(StoreInst::create(assignToPtr, expr.to_argument()));
             return expr;
@@ -476,12 +481,9 @@ IR::RegOrImmediate IR::IRContext::lower_unary_op(const UnaryOp *unary_op) {
             current_block->add_instruction(UnaryInst::create(output, expr.to_argument(), UnaryInst::Operation::INVERT));
             return RegOrImmediate(output);
         }
-        case UnaryOp::ADDRESS_OF: {
-            Register output = get_next_temp_reg(Register::Type::Ptr);
-            //TODO: Unfinished
-        }
         case UnaryOp::DEREFERENCE:
         case UnaryOp::SIZEOF:
+        default:
             throw std::runtime_error("Not implemented");
     }
 }
@@ -489,8 +491,7 @@ IR::RegOrImmediate IR::IRContext::lower_unary_op(const UnaryOp *unary_op) {
 IR::RegOrImmediate IR::IRContext::lower_post_assignment(const PostAssignment *assignment) {
     RegOrImmediate expr = lower_expression(assignment->get_lhs());
     Register temp = get_next_temp_reg();
-    auto *idNode = cast<Identifier>(assignment->get_lhs());
-    auto destReg = Register(idNode->get_value(), Register::Type::Ptr, 4);
+    auto destReg = lower_lvalue_ptr(assignment->get_lhs());
 
     auto operation = assignment->get_operation() == PostAssignment::INCREMENT ? ArithInst::Operation::ADD : ArithInst::Operation::SUBTRACT;
     current_block->add_instruction(ArithInst::create(temp, expr.to_argument(), ImmediateArgument::create(1, temp.size), operation));
@@ -521,25 +522,8 @@ IR::RegOrImmediate IR::IRContext::lower_identifier(const Identifier *idNode) {
     throw std::runtime_error("Not implemented");
 }
 
-bool parse_long(const std::string& str, long& output) {
-    try {
-        // Ensure full string is used in converting to a number
-        size_t pos;
-        output = std::stol(str, &pos, 10);
-        if (pos != str.length()) {
-            return false;
-        }
-        return true;
-    } catch ([[maybe_unused]] std::invalid_argument& e) {
-        return false;
-    }
-}
-
 IR::RegOrImmediate IR::IRContext::lower_constant(const Constant *constantNode) {
-    auto &valueStr = constantNode->get_value();
-    // TODO: Need better constant parsing
-    long value;
-    parse_long(valueStr,value);
+    long value = constantNode->get_parsed_value();
     return RegOrImmediate(Immediate(value, constantNode->get_type_info().get_size()));
 }
 
@@ -564,6 +548,25 @@ IR::RegOrImmediate IR::IRContext::lower_function_call(const FunctionCall *functi
     }
 
     return RegOrImmediate(destReg);
+}
+
+IR::Register IR::IRContext::lower_lvalue_ptr(const Expression *expr) {
+    assert(Sema::is_lvalue(expr));
+    if (auto *idNode = dyn_cast<Identifier>(expr)) {
+        if (id_reg_map.contains(idNode->get_symbol_entry())) {
+            return id_reg_map.at(idNode->get_symbol_entry()).back();
+        }
+        throw std::runtime_error("Register for identifier does not exist");
+    }
+    if (auto *unaryOp = dyn_cast<UnaryOp>(expr)) {
+        assert(unaryOp->get_operation() == UnaryOp::DEREFERENCE);
+        Register output = get_next_temp_reg(Register::Type::Ptr, 4);
+        Register dereferencedPtr = lower_lvalue_ptr(unaryOp->get_rhs());
+        current_block->add_instruction(LoadInst::create(output, RegisterArgument::create(dereferencedPtr)));
+        return output;
+    }
+
+    throw std::runtime_error("Not implemented");
 }
 
 IR::Global * IR::IRContext::add_global(const std::string& identifier, MemSize size) {

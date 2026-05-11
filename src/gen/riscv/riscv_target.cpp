@@ -72,27 +72,9 @@ void RISCVTarget::gen_instruction(const IR::IRContext &ctx, const IR::Function *
         size_t stackPos = reserve_next_alloca(allocaInst->get_size());
         register_stack_map[allocaInst->get_dest().name] = stackPos;
     } else if (auto *loadInst = dyn_cast<IR::LoadInst>(instruction)) {
-        auto destReg = get_or_allocate_machine_reg(loadInst->get_dest());
-        auto *source = loadInst->get_source();
-        if (auto *regArg = dyn_cast<IR::RegisterArgument>(source)) {
-            load_reg_on_stack(destReg, register_stack_map.at(regArg->reg.name));
-        } else if (auto *globalArg = dyn_cast<IR::GlobalArgument>(source)) {
-            throw std::runtime_error("Not implemented");
-        } else {
-            throw std::runtime_error("Not implemented");
-        }
+        gen_load_instruction(ctx, loadInst);
     } else if (auto *storeInst = dyn_cast<IR::StoreInst>(instruction)) {
-        size_t stackOffset = register_stack_map.at(storeInst->get_dest().name);
-        auto *source = storeInst->get_source();
-        if (auto *regArg = dyn_cast<IR::RegisterArgument>(source)) {
-            auto sourceReg = get_or_allocate_machine_reg(regArg->reg);
-            set_reg_on_stack(sourceReg, stackOffset);
-        } else if (auto *immediate = dyn_cast<IR::ImmediateArgument>(source)) {
-            auto tempReg = allocate_machine_reg();
-            add_instruction("li " + tempReg + ", " + std::to_string(immediate->imm.value));
-            set_reg_on_stack(tempReg, stackOffset);
-            free_machine_reg(tempReg);
-        }
+        gen_store_instruction(ctx, storeInst);
     } else if (auto *returnInst = dyn_cast<IR::ReturnInst>(instruction)) {
         gen_return_instruction(ctx, returnInst);
     } else if (auto *callInst = dyn_cast<IR::CallInst>(instruction)) {
@@ -287,7 +269,7 @@ void RISCVTarget::gen_return_instruction(const IR::IRContext &ctx, const IR::Ret
     if (auto *immediateArg = dyn_cast<IR::ImmediateArgument>(returnValue)) {
         add_instruction("li a0, " + std::to_string(immediateArg->imm.value));
     } else if (auto *regArg = dyn_cast<IR::RegisterArgument>(returnValue)) {
-        auto machineReg = get_or_allocate_machine_reg(regArg->reg);
+        auto machineReg = get_possibly_ptr_machine_reg(regArg->reg);
         add_instruction("mv a0, " + machineReg);
     }
     const size_t stackSize = get_aligned_stack_size(max_stack_alloc);
@@ -316,7 +298,7 @@ void RISCVTarget::gen_call_instruction(const IR::IRContext &ctx, const IR::CallI
         if (auto *immediateArg = dyn_cast<IR::ImmediateArgument>(argument)) {
             add_instruction("li " + argReg + ", " + std::to_string(immediateArg->imm.value));
         } else if (auto *regArg = dyn_cast<IR::RegisterArgument>(argument)) {
-            auto machineReg = get_or_allocate_machine_reg(regArg->reg);
+            auto machineReg = get_possibly_ptr_machine_reg(regArg->reg);
             add_instruction("mv " + argReg + ", " + machineReg);
         }
     }
@@ -339,6 +321,56 @@ void RISCVTarget::gen_call_instruction(const IR::IRContext &ctx, const IR::CallI
     }
     std::string outputReg = get_or_allocate_machine_reg(callInst->get_dest());
     add_instruction("mv " + outputReg + ", a0");
+}
+
+void RISCVTarget::gen_load_instruction(const IR::IRContext &ctx, const IR::LoadInst *loadInst) {
+    auto destReg = get_possibly_ptr_machine_reg(loadInst->get_dest());
+    auto *source = loadInst->get_source();
+    if (auto *regArg = dyn_cast<IR::RegisterArgument>(source)) {
+        if (register_stack_map.contains(regArg->reg.name)) {
+            load_reg_on_stack(destReg, register_stack_map.at(regArg->reg.name));
+        } else if (regArg->reg.type == IR::Register::Type::Ptr && ir_to_machine_reg.contains(regArg->reg.name)) {
+            auto sourceReg = get_machine_reg(regArg->reg);
+            add_instruction("lw " + destReg + ", (" + sourceReg + ")");
+        } else {
+            throw std::runtime_error("Not implemented");
+        }
+    } else if (auto *globalArg = dyn_cast<IR::GlobalArgument>(source)) {
+        throw std::runtime_error("Not implemented");
+    } else {
+        throw std::runtime_error("Not implemented");
+    }
+}
+
+void RISCVTarget::gen_store_instruction(const IR::IRContext &ctx, const IR::StoreInst *storeInst) {
+    auto *source = storeInst->get_source();
+    std::string sourceReg;
+    if (auto *regArg = dyn_cast<IR::RegisterArgument>(source)) {
+        sourceReg = get_possibly_ptr_machine_reg(regArg->reg);
+    } else if (auto *immediate = dyn_cast<IR::ImmediateArgument>(source)) {
+        sourceReg = allocate_machine_reg();
+        add_instruction("li " + sourceReg + ", " + std::to_string(immediate->imm.value));
+        free_machine_reg(sourceReg);
+    }
+
+    const auto &dest = storeInst->get_dest();
+    if (register_stack_map.contains(dest.name)) {
+        size_t stackOffset = register_stack_map.at(dest.name);
+        set_reg_on_stack(sourceReg, stackOffset);
+    } else if (dest.type == IR::Register::Type::Ptr && ir_to_machine_reg.contains(dest.name)) {
+        auto destPtr = get_machine_reg(dest);
+        add_instruction("sw " + sourceReg + ", (" + destPtr + ")");
+    } else {
+        throw std::runtime_error("Not implemented");
+    }
+}
+
+std::string RISCVTarget::get_possibly_ptr_machine_reg(const IR::Register &reg) {
+    std::string machineReg = get_or_allocate_machine_reg(reg);
+    if (reg.type == IR::Register::Type::Ptr && register_stack_map.contains(reg.name)) {
+        add_instruction("addi " + machineReg + ", sp, " + std::to_string(register_stack_map.at(reg.name)));
+    }
+    return machineReg;
 }
 
 size_t RISCVTarget::compute_stack_allocations(const IR::IRContext &ctx, const IR::Function *function) {
@@ -380,6 +412,13 @@ std::string RISCVTarget::get_or_allocate_machine_reg(const IR::Register &reg) {
     std::string machineReg = allocate_machine_reg();
     ir_to_machine_reg[reg.name] = machineReg;
     return machineReg;
+}
+
+std::string RISCVTarget::get_machine_reg(const IR::Register &reg) {
+    if (!ir_to_machine_reg.contains(reg.name)) {
+        throw std::runtime_error("Ir register does not have corrosponding machine register allocated");
+    }
+    return ir_to_machine_reg.at(reg.name);
 }
 
 void RISCVTarget::free_machine_reg(const std::string &reg) {

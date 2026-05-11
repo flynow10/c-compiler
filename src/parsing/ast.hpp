@@ -2018,6 +2018,8 @@ namespace AST {
             return constant;
         }
 
+        [[nodiscard]] long get_parsed_value() const;
+
         static unique_ptr<Constant> create(std::string constant) {
             auto base = std::make_unique<Constant>();
             base->constant = std::move(constant);

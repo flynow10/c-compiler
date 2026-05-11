@@ -3,49 +3,28 @@ main:
 	addi sp, sp, -16
 	sw ra, 12(sp)
 .L_main_0:
-	li a0, 10
-	jal factorial
-	mv t0, a0
+	li t0, 2
+	sw t0, 8(sp)
+	addi t0, sp, 8
 	mv a0, t0
+	jal mod
+	mv t1, a0
+	lw t2, 8(sp)
+	mv a0, t2
 	lw ra, 12(sp)
 	addi sp, sp, 16
 	ret
-factorial:
+mod:
 	addi sp, sp, -16
 	sw ra, 12(sp)
-.L_factorial_0:
+.L_mod_0:
 	sw a0, 8(sp)
 	lw t0, 8(sp)
-	xori t1, t0, 0
-	seqz t1, t1
-	beqz t1, .L_factorial_2
-.L_factorial_1:
-	li a0, 1
-	lw ra, 12(sp)
-	addi sp, sp, 16
-	ret
-.L_factorial_2:
-	lw t2, 8(sp)
-	lw s0, 8(sp)
-	li s2, 1
-	sub s1, s0, s2
-	addi sp, sp, -20
-	sw t0, 0(sp)
-	sw t1, 4(sp)
-	sw t2, 8(sp)
-	sw s0, 12(sp)
-	sw s1, 16(sp)
-	mv a0, s1
-	jal factorial
-	lw t0, 0(sp)
-	lw t1, 4(sp)
-	lw t2, 8(sp)
-	lw s0, 12(sp)
-	lw s1, 16(sp)
-	addi sp, sp, 20
-	mv s2, a0
-	mul s3, t2, s2
-	mv a0, s3
+	lw t1, (t0)
+	li s0, 4
+	mul t2, t1, s0
+	sw t2, (t0)
+	li a0, 0
 	lw ra, 12(sp)
 	addi sp, sp, 16
 	ret
