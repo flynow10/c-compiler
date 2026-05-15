@@ -52,6 +52,18 @@ Target Generation Features:
 - [ ] Liveness based register allocation
 - [ ] Syscalls
 
+## Removed Features
+
+While most features of the C89 standard are implemented or planned to be implemented, a few are intentionally removed
+to decrease complexity.
+
+- Enums
+- Unions
+- Type definitions using the `typedef` keyword
+- Preprocessor directives
+- The `volatile` and `register` qualifiers
+- The `static` storage class
+
 ## Usage
 
 The project can be built using CMake by running

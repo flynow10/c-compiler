@@ -25,9 +25,7 @@ control-statement := (BREAK | CONTINUE) ';'
 
 declaration := declaration-specifiers init-declarator-list? ';'
 
-declaration-specifiers := (storage-class | type-specifier | type-qualifier)+
-
-storage-class := STATIC
+declaration-specifiers := (type-specifier | type-qualifier)+
 
 type-specifier := VOID | CHAR | SHORT | INT | LONG | UNSIGNED | SIGNED | struct-specifier
 
